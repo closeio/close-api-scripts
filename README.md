@@ -1,11 +1,10 @@
-# closeio-api-scripts
-Example scripts using the [Close.io API](http://developer.close.io/)
+## Close.io API
 
-Install basic dependencies
------
-Before you start, you should already have `git`, `python-2.7` and `virtualenv` installed. For OS X users, we recommend [MacPorts](http://www.macports.org/).
+[![PyPI version](https://badge.fury.io/py/closeio.svg)](https://badge.fury.io/py/closeio)
 
-Next you have to install the API Client.
+A convenient Python wrapper for the [Close.io](https://close.io/) API.
+
+See the developer docs at http://developer.close.io. For any questions or issues, please contact support(at)close(dot)io.
 
 ### Installation (of API client)
 
@@ -33,18 +32,17 @@ lead_results = api.get('lead', params={
 })
 ```
 
+Check out `scripts/` for more detailed examples.
+
 ### Running a script
 ```bash
-$ git clone https://github.com/closeio-api-scripts.git
-$ cd closeio-api-scripts
+$ git clone https://github.com/closeio/closeio-api-scripts.git
+$ cd closeio-api
 $ virtualenv venv
 $ source venv/bin/activate
-$ pip -U -r requirements.txt
+$ pip install -r requirements.txt
+$ python setup.py install
 $ python scripts/merge_leads.py -k MYAPIKEY 
 ...
 
 ```
-
-Check out `scripts/` for more detailed examples.
-
-If you have any questions, please contact support@close.io 
