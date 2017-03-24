@@ -1,51 +1,61 @@
 # closeio-api-scripts
-Example scripts using the [Close.io API](http://developer.close.io/)
+
+Example Python scripts for interacting with [Close.io](http://close.io/) through its [API](http://developer.close.io/)
+using the [closeio_api Python client](https://github.com/closeio/closeio-api).
+
+## Install basic dependencies
+
+Before you start, you should already have `git`, `python` (2.7) and `virtualenv` installed. For OS X users, we recommend [Homebrew](https://brew.sh/).
+
+## Setup
+
+1. `git clone git@github.com:closeio/closeio-api-scripts.git`
+1. `cd closeio-api-scripts`
+1. `virtualenv venv`
+1. `. venv/bin/activate`
+1. `pip install -r requirements.txt`
 
 
-Install basic dependencies
------
-Before you start, you should already have `git`, `python-2.7` and `virtualenv` installed. For OS X users, we recommend [MacPorts](http://www.macports.org/).
+## Running a script
 
-Next, you have to install the API Client.
+Example:
 
-### Installation (of API client)
-
-`pip install closeio`
-
-### Sample Usage (of API client)
-
-```python
-from closeio_api import Client
-import urllib
-
-api = Client('YOUR_API_KEY')
-
-# post a lead
-lead = api.post('lead', data={'name': 'New Lead'})
-
-# get 5 most recently updated opportunities
-opportunities = api.get('opportunity', params={'_order_by': '-date_updated', '_limit': 5})
-
-# fetch multiple leads (using search syntax)
-lead_results = api.get('lead', params={
-    '_limit': 10,
-    '_fields': 'id,display_name,status_label',
-    'query': 'custom.my_custom_field:"some_value" status:"Potential" sort:updated'
-})
-```
-
-### Running a script
 ```bash
-$ git clone https://github.com/closeio/closeio-api-scripts.git
-$ cd closeio-api-scripts
-$ virtualenv venv
-$ source venv/bin/activate
-$ pip install -r requirements.txt
-$ python scripts/merge_leads.py -k MYAPIKEY 
+python scripts/merge_leads.py -k MYAPIKEY 
 ...
 
 ```
 
-Check out `scripts/` for more detailed examples.
+If you have any questions, please contact [support@close.io](mailto:support@close.io?Subject=API%20Scripts).
 
-If you have any questions, please contact support@close.io 
+---
+
+## Documentation for individual scripts
+
+#### How to run the CSV importing script
+
+The script will look for your CSV to have specific column names (case insensitive). All columns are optional. All columns not listed below will be imported as custom fields.
+
+- `company` (multiple contacts will be grouped if rows have the same company
+- `url` (must start with http:// or https://)
+- `status` (defaults to "potential")
+- `contact` (full name of contact)
+- `title` (job title of contact)
+- `email` (must be a valid email address)
+- `phone` (must be a valid phone number, and must start with a "+" if it's a non-US number)
+- `mobile_phone`
+- `fax`
+- `address` (street address)
+- `city`
+- `state` (2 letter abbreviation)
+- `zip`
+- `country` (2 letter abbreviation)
+- (any additional fields will be added as custom fields)
+
+Multiple contacts will be grouped in the same lead if multiple rows have the same value in the "company" column.
+
+2. Make sure (if you haven't already in Setup) you're in the `closeio-api` directory and you have activated your virtual environment by running `. venv/bin/activate`.
+
+3. Run the import script: `./scripts/csv_to_cio.py --api_key YOUR_API_KEY_HERE ~/path/to/your/leads.csv`
+
+You can generate an API Key from Settings in Close.io.
