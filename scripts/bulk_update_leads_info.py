@@ -236,11 +236,12 @@ for r in c:
                     'lead_id': lead['id'],
                     'note': r.get('opportunity%s_note' % i),
                     #'value': int(float(re.sub(r'[^\d.]', '', r['opportunity%s_value' % i])) * 100),  # converts $1,000.42 into 100042
-                    'value': int(r['opportunity%s_value' % i]) if 'opportunity%s_value' %i in r else None,  # assumes cents are given
+                    'value': int(r['opportunity%s_value' % i]) if r.get('opportunity%s_value' % i) else None,  # assumes cents are given
                     'value_period': r.get('opportunity%s_value_period' % i),
-                    'confidence': int(r['opportunity%s_confidence' % i]) if 'opportunity%s' % i in r else None,
+                    'confidence': int(r['opportunity%s_confidence' % i]) if r.get('opportunity%s' % i) else None,
                     'status': r.get('opportunity%s_status' % i),
-                    'date_won': str(parse_date(r['opportunity%s_date_won' % i])) if 'opportunity%s_date_won' % i in r else None
+                    'date_won': str(parse_date(r['opportunity%s_date_won' % i])) if r.get('opportunity%s_date_won' % i) else None
+                    # 'date_won': str(parse_date(r['opportunity%s_date_won' % i])) if 'opportunity%s_date_won' % i in r else None
                     #'date_won': str(datetime.datetime.strptime(r['opportunity%s_date_won' % i], '%d/%m/%y')),
                 }
                 if args.confirmed:
