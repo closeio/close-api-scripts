@@ -34,7 +34,7 @@ while has_more:
 f = open('unattached_calls.csv', 'wt')
 try:
     writer = csv.writer(f)
-    writer.writerow( ('Date', 'User', 'Customer Phone', 'Direction', 'Duration', 'voicemail_url') )
+    writer.writerow( ('Date', 'User', 'Customer Phone', 'Direction', 'Duration', 'Recording Url') )
     for a in activities:
         writer.writerow(('%s' % a['date_created'], '%s' % a['created_by_name'], '%s' % a['remote_phone'], '%s' % a['direction'], '%s' % a ['duration'], '%s' % a['recording_url'])) 
 finally:
