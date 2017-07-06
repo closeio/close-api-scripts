@@ -78,6 +78,9 @@ celerybeat-schedule
 # dotenv
 .env
 
+# Finder
+.DS_Store
+
 # virtualenv
 venv/
 ENV/
