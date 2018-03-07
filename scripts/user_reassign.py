@@ -29,6 +29,9 @@ group.add_argument('--all-opportunities', action='store_true', help='reassign al
 
 args = parser.parse_args()
 
+full_tasks = []
+full_opps = []
+
 if not any([args.tasks, args.opportunities, args.all_tasks, args.all_opportunities]):
     parser.error("at least one option required")
 
@@ -106,18 +109,23 @@ try:
             tasks = resp['data']
             for task in tasks:
                 if args.confirmed:
-                    try:
-                        api.put('task/'+task['id'], data={'assigned_to': to_user_id})
-                    except APIError as e:
-                        tasks_errors += 1
-                        if not args.continue_on_error:
-                            raise e
-                        logging.error('task %s skipped with error %s' % (task['id'], e))
-                logging.info('updated %s' % task['id'])
-                updated_tasks += 1
-
+                    full_tasks.append(task['id'])
+                else:
+                    logging.info('updated %s' % task['id'])
+                    updated_tasks += 1
             offset += len(tasks)
             has_more = resp['has_more']
+
+        for task_id in full_tasks:
+            try:
+                api.put('task/'+task_id, data={'assigned_to': to_user_id})
+                logging.info('updated %s' % task_id)
+                updated_tasks += 1
+            except APIError as e:
+                tasks_errors += 1
+                if not args.continue_on_error:
+                    raise e
+                logging.error('task %s skipped with error %s' % (task['id'], e))
 
     # opportunities
     updated_opportunities = 0
@@ -140,18 +148,23 @@ try:
             opportunities = resp['data']
             for opportunity in opportunities:
                 if args.confirmed:
-                    try:
-                        api.put('opportunity/'+opportunity['id'], data={'user_id': to_user_id})
-                    except APIError as e:
-                        opportunities_errors += 1
-                        if not args.continue_on_error:
-                            raise e
-                        logging.error('opportunity %s skipped with error %s' % (opportunity['id'], e))
-                logging.info('updated %s' % opportunity['id'])
-                updated_opportunities += 1
-
+                    full_opps.append(opportunity['id'])
+                else:
+                    logging.info('updated %s' % opportunity['id'])
+                    updated_opportunities += 1
             offset += len(opportunities)
             has_more = resp['has_more']
+
+        for opp_id in full_opps:
+            try:
+                api.put('opportunity/'+ opp_id, data={'user_id': to_user_id})
+                logging.info('updated %s' % opp_id)
+                updated_opportunities += 1
+            except APIError as e:
+                opportunities_errors += 1
+                if not args.continue_on_error:
+                    raise e
+                logging.error('opportunity %s skipped with error %s' % (opportunity['id'], e))
 except APIError:
     logging.error('stopped on error %s' % e)
 
