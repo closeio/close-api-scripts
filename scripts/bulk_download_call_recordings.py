@@ -52,7 +52,7 @@ has_more = True
 offset = 0
 params['_fields'] = 'recording_url,voicemail_url,date_created,lead_id,duration,voicemail_duration'
 while has_more:
-	params['offset'] = offset
+	params['_skip'] = offset
 	resp_calls = api.get('activity/call', params=params)
 	for call in resp_calls['data']:
 		if call['duration'] > 0 or call['voicemail_duration'] > 0: 
