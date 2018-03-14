@@ -9,7 +9,7 @@ Before you start, you should already have `git`, `python` (2.7) and `virtualenv`
 
 ## Setup
 
-1. `git clone git@github.com:closeio/closeio-api-scripts.git`
+1. `git clone https://github.com/closeio/closeio-api-scripts.git`
 1. `cd closeio-api-scripts`
 1. `virtualenv venv`
 1. `. venv/bin/activate`
