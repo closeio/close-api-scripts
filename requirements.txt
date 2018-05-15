@@ -1,6 +1,6 @@
-click==6.6
+click==6.7
 progressbar-latest==2.4
-python-dateutil==2.5.3
-requests==2.11.1
-Unidecode==0.4.19
-closeio==0.5
+python-dateutil==2.7.3
+requests==2.18.4
+Unidecode==1.0.22
+closeio==1.0
