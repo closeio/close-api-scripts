@@ -23,11 +23,11 @@ has_more = True
 activities = []
 
 while has_more: 
-	resp = api.get('activity/call', params={'_skip':offset, 'date_created__gte':'2018-07-18'})
+	resp = api.get('activity/call', params={ '_skip':offset })
 	print offset
 	calls = resp['data']
 	for call in calls:
-		if call['lead_id'] == None and call['contact_id'] == None and call['direction']=='inbound':
+		if call['lead_id'] == None:
 			activities.append(call)
 	print offset
 	offset+=len(calls)
