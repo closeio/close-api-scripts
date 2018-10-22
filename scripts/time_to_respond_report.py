@@ -8,7 +8,7 @@ import csv
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
-parser = argparse.ArgumentParser(description='Get Time To Response Metrics From Org')
+parser = argparse.ArgumentParser(description='Get Time To Respond Metrics From Org')
 
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
 parser.add_argument('--past-days', '-p', required=True, help='How many days in the past should we start the calculation?')
@@ -54,7 +54,6 @@ end = end.strftime("%Y-%m-%dT%H:%M:%S")
 
 user_stats = []
 
-
 def getTTR(user):
 	if user != None:
 		print "Getting all activities in the last %s days for %s..." % (args.past_days, user['user_full_name'])
@@ -70,9 +69,9 @@ def getTTR(user):
 
 	while has_more:
 		if user != None:
-			resp = api.get('activity', params={ '_skip':offset, 'date_created__gte':start, 'date_created__lte':end, '_fields': '_type,id,date_created,lead_id,direction,user_id', 'user_id': user['user_id'] })
+			resp = api.get('activity', params={ '_skip':offset, 'date_created__gte':start, 'date_created__lte':end, '_fields': '_type,id,date_created,lead_id,direction,user_id,duration', 'user_id': user['user_id'] })
 		else:
-			resp = api.get('activity', params={ '_skip':offset, 'date_created__gte':start, 'date_created__lte':end, '_fields': '_type,id,date_created,lead_id,direction,user_id' })
+			resp = api.get('activity', params={ '_skip':offset, 'date_created__gte':start, 'date_created__lte':end, '_fields': '_type,id,date_created,lead_id,direction,user_id,duration' })
 		for activity in resp['data']:
 			if activity['_type'] in ['Call', 'Email', 'SMS'] and activity['lead_id'] != None:
 				activity['date_created'] = activity['date_created'].split('+')[0].split('.')[0]
@@ -90,7 +89,7 @@ def getTTR(user):
 	total_time_to_respond_with_not_responded_to_yet = 0
 	total_time_to_respond = 0
 
-	inbound_activities = [i for i in activities if (i['direction'] == 'incoming' or i['direction'] == 'inbound')]
+	inbound_activities = [i for i in activities if ((i['direction'] == 'incoming' or i['direction'] == 'inbound') and (i['_type'] in ['SMS', 'Email'] or (i['_type'] == 'Call' and i['duration'] == 0))) ]
 
 	now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -150,7 +149,3 @@ try:
 	writer.writerows(user_stats) 
 finally:
 	f.close()
-
-
-
-
