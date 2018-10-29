@@ -21,7 +21,7 @@ Before you start, you should already have `git`, `python` (2.7) and `virtualenv`
 Example:
 
 ```bash
-python scripts/merge_leads.py -k MYAPIKEY 
+python scripts/run_leads_deleted_report.py -k MYAPIKEY 
 ...
 
 ```
