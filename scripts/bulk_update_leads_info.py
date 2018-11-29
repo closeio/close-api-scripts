@@ -32,8 +32,11 @@ Header's columns may be declared in any order. Detects csv dialect (delimeter an
 """, epilog="""
 key columns:
     * lead_id                           - If exists and not empty, update using lead_id.
-    * company                           - If lead_id is empty or is not exists, imports to
+    * company                           - If lead_id is empty or does not exist, imports to
                                           first lead from found company. If the company was
+                                          not found, loads as new lead.
+    * email_address                     - If lead_id is empty or does not exist and company is empty, imports to
+                                          first lead from found email address. If the email address was
                                           not found, loads as new lead.
 lead columns:
     * url                               - lead url
@@ -91,12 +94,23 @@ logging.debug('parameters: %s' % vars(args))
 sniffer = csv.Sniffer()
 dialect = sniffer.sniff(args.csvfile.read(1000000))
 args.csvfile.seek(0)
+error_array=[]
 c = csv.DictReader(args.csvfile, dialect=dialect)
 
-assert any(x in ('company', 'lead_id') for x in c.fieldnames), \
-    'ERROR: column "company" or "lead_id" is not found'
+
+assert any(x in ('company', 'lead_id', 'email_address') for x in c.fieldnames), \
+    'ERROR: column "company" or "lead_id" or "email_address" is not found'
+
+header_row = {}
+for col in c.fieldnames:
+    header_row[col] = col
+header_row['Validation Error'] = 'Validation Error'
+
+error_array.append(header_row)
 
 api = CloseIO_API(args.api_key, development=args.development)
+org_id = api.get('api_key/' + args.api_key)['organization_id']
+org_name = api.get('organization/' + org_id)['name']
 
 resp = api.get('custom_fields/lead')
 available_custom_fieldnames = [x['name'] for x in resp['data']]
@@ -188,6 +202,17 @@ for r in c:
             })
             logging.debug('received: %s' % resp)
             lead = resp
+
+        elif r.get('email_address') is not None:
+            resp = api.get('lead', params={
+                'query': 'email_address:"%s" sort:created' % r['email_address'],
+                '_fields': 'id,display_name,name,contacts,custom',
+                'limit': 1
+            })
+            logging.debug('received: %s' % resp)
+            if resp['total_results']:
+                lead = resp['data'][0]
+
         else:
             # first lead in the company
             resp = api.get('lead', params={
@@ -214,7 +239,7 @@ for r in c:
                 lead = api.post('lead', data=payload)
             logging.info('line %d new: %s %s' % (c.line_num,
                                                  lead['id'] if args.confirmed else 'X',
-                                                 payload['name']))
+                                                 lead['display_name']))
             new_leads += 1
 
         notes = [r[x] for x in r.keys() if re.match(r'note[0-9]', x) and r[x]]
@@ -249,13 +274,23 @@ for r in c:
             else:
                 logging.error('line %d is not a fully filled opportunity %s, skipped' % (c.line_num, i))
 
-    except APIError as e:
+    except Exception as e:
         logging.error('line %d skipped with error %s' % (c.line_num, e))
         skipped_leads += 1
+        r['Validation Error'] = e
+        error_array.append(r)
         if not args.continue_on_error:
             logging.info('stopped on error')
             sys.exit(1)
 
 logging.info('summary: updated[%d], new[%d], skipped[%d]' % (updated_leads, new_leads, skipped_leads))
-if skipped_leads:
-    sys.exit(1)
+
+if len(error_array) > 1:
+    f = open('%s Bulk Update Errored Rows.csv' % (org_name), 'wt')
+    try:
+        keys = error_array[0].keys()
+        ordered_keys = ['Validation Error'] + c.fieldnames
+        writer = csv.DictWriter(f, ordered_keys)
+        writer.writerows(error_array) 
+    finally:
+        f.close()   
