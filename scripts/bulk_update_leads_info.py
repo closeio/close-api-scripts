@@ -241,6 +241,14 @@ for r in c:
                                                  lead['id'] if args.confirmed else 'X',
                                                  lead['display_name']))
             new_leads += 1
+            
+        elif lead is None and args.disable_create:
+            r['Validation Error'] = 'Lead does not exist in Close'
+            skipped_leads += 1
+            logging.info('line %d skipped: %s does not exist in Close.io' % (c.line_num,
+                                                 r['company'] if r.get('company') else r['email_address']))
+            error_array.append(r)
+            continue
 
         notes = [r[x] for x in r.keys() if re.match(r'note[0-9]', x) and r[x]]
         for note in notes:
