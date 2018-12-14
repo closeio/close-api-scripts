@@ -237,9 +237,12 @@ for r in c:
             logging.debug('to sent: %s' % payload)
             if args.confirmed:
                 lead = api.post('lead', data=payload)
-            logging.info('line %d new: %s %s' % (c.line_num,
-                                                 lead['id'] if args.confirmed else 'X',
-                                                 lead['display_name']))
+                logging.info('line %d new: %s %s' % (c.line_num,
+                                                     lead['id'] if args.confirmed else 'X',
+                                                     lead['display_name']))
+            else:
+                logging.info('line %d new lead for: %s' % (c.line_num,
+                                                     r['company'] if r.get('company') else r['email_address']))
             new_leads += 1
             
         elif lead is None and args.disable_create:
