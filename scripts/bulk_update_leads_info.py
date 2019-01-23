@@ -97,9 +97,15 @@ args.csvfile.seek(0)
 error_array=[]
 c = csv.DictReader(args.csvfile, dialect=dialect)
 
+unique_field = None
 
-assert any(x in ('company', 'lead_id', 'email_address') for x in c.fieldnames), \
-    'ERROR: column "company" or "lead_id" or "email_address" is not found'
+assert any(x in ('company', 'lead_id', 'email_address') or x.startswith('unique.custom.') for x in c.fieldnames), \
+    'ERROR: column "company" or "lead_id" or "email_address" or a field starting with unique.custom. is not found'
+
+if 'lead_id' not in c.fieldnames:
+    unique_fields = [i for i in c.fieldnames if i.startswith('unique.custom.')]
+    if len(unique_fields) > 0:
+        unique_field = unique_fields[0]
 
 header_row = {}
 for col in c.fieldnames:
@@ -193,6 +199,9 @@ for r in c:
     if custom_patches:
         payload.update(custom_patches)
 
+    if r.get(unique_field):
+        payload.update({ unique_field.replace("unique.custom.", "custom."): r[unique_field] })
+
     try:
         lead = None
         if r.get('lead_id') is not None:
@@ -202,6 +211,17 @@ for r in c:
             })
             logging.debug('received: %s' % resp)
             lead = resp
+
+        elif r.get(unique_field) is not None:
+            field = unique_field.replace("unique.custom.", "custom.")
+            resp = api.get('lead', params={
+                'query': '"%s":"%s" sort:created' % (field, r[unique_field]),
+                '_fields': 'id,display_name,name,contacts,custom',
+                'limit': 1
+            })
+            logging.debug('received: %s' % resp)
+            if resp['total_results']:
+                lead = resp['data'][0]
 
         elif r.get('email_address') is not None:
             resp = api.get('lead', params={
@@ -242,14 +262,14 @@ for r in c:
                                                      lead['display_name']))
             else:
                 logging.info('line %d new lead for: %s' % (c.line_num,
-                                                     r['company'] if r.get('company') else r['email_address']))
+                                                     r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
             new_leads += 1
             
         elif lead is None and args.disable_create:
             r['Validation Error'] = 'Lead does not exist in Close'
             skipped_leads += 1
             logging.info('line %d skipped: %s does not exist in Close.io' % (c.line_num,
-                                                 r['company'] if r.get('company') else r['email_address']))
+                                                 r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
             error_array.append(r)
             continue
 
