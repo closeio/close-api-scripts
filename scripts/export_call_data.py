@@ -21,6 +21,8 @@ parser.add_argument('--phone-number', '-p',
                     help='The phone number you\'d like to export the calls for in E164 international format. Example: +18552567346')
 parser.add_argument('--unattached-only', '-o', action='store_true', help='Use this field if you only want to find calls not attached to a lead')
 parser.add_argument('--user-id', '-u', help='Use this field if you only want to find calls for a specific user')
+parser.add_argument('--include-cost', '-c', action='store_true', help='Use this field if you want to export the cost of each call')
+
 
 
 args = parser.parse_args()
@@ -49,14 +51,15 @@ query = query + ")"
 if args.user_id:
     params['user_id'] = args.user_id
 
-while has_more:
-    
-    resp = api.get('lead', params={ '_skip': offset, 'query': query, '_fields': 'id,display_name' })
-    for lead in resp['data']:
-        display_names[lead['id']] = lead['display_name']
-        
-    offset+=len(resp['data'])
-    has_more = resp['has_more']
+if not args.unattached_only:
+    print "Getting Lead Display Names..."
+    while has_more:
+        resp = api.get('lead', params={ '_skip': offset, 'query': query, '_fields': 'id,display_name' })
+        for lead in resp['data']:
+            display_names[lead['id']] = lead['display_name']
+        print offset
+        offset+=len(resp['data'])
+        has_more = resp['has_more']
 
 has_more = True
 offset = 0 
@@ -65,14 +68,6 @@ print "Getting Calls:"
 while has_more:
     params['_skip'] = offset
     resp = api.get('activity/call', params=params)
-    if args.missed_or_voicemail:
-        resp['data'] = [i for i in resp['data'] if i['duration'] == 0]
-    if args.direction:
-        resp['data'] = [i for i in resp['data'] if i['direction'] == args.direction]
-    if args.phone_number:
-        resp['data'] = [i for i in resp['data'] if i['local_phone'] == args.phone_number]
-    if args.unattached_only:
-        resp['data'] = [i for i in resp['data'] if i['lead_id'] == None]
     for call in resp['data']:
         if call.get('lead_id') and display_names.get(call['lead_id']):
             call['lead_name'] = display_names[call['lead_id']]
@@ -83,9 +78,18 @@ while has_more:
     print offset
     has_more = resp['has_more']
 
+if args.missed_or_voicemail:
+    calls = [i for i in calls if i['duration'] == 0]
+if args.direction:
+    calls = [i for i in calls if i['direction'] == args.direction]
+if args.phone_number:
+    calls = [i for i in calls if i['local_phone'] == args.phone_number]
+if args.unattached_only:
+    calls = [i for i in calls if i['lead_id'] == None]
+
 f = open('%s Calls.csv' % org_name, 'wt')
 try: 
-    keys = ['date_created', 'updated_by_name'] + [i for i in calls[0].keys() if i not in ['date_created', 'updated_by_name']]
+    keys = ['date_created', 'updated_by_name'] + [i for i in params['_fields'].split(',') if i not in ['date_created', 'updated_by_name', 'lead_id']] + ['lead_id', 'lead_name']
     writer = csv.DictWriter(f, keys)
     writer.writeheader()
     writer.writerows(calls)
