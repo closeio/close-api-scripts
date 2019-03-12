@@ -21,8 +21,6 @@ parser.add_argument('--phone-number', '-p',
                     help='The phone number you\'d like to export the calls for in E164 international format. Example: +18552567346')
 parser.add_argument('--unattached-only', '-o', action='store_true', help='Use this field if you only want to find calls not attached to a lead')
 parser.add_argument('--user-id', '-u', help='Use this field if you only want to find calls for a specific user')
-parser.add_argument('--include-cost', '-c', action='store_true', help='Use this field if you want to export the cost of each call')
-
 
 
 args = parser.parse_args()
