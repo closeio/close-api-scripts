@@ -61,7 +61,7 @@ while has_more:
 					'Date': event['date_created'], 
 					'Lead ID': event['lead_id'], 
 					'Lead Name': event['data']['display_name'], 
-					'User that Made the Change': event['user_id'], 
+					'User that Made the Change': users[event['user_id']], 
 					'Old Value': event['previous_data'].get(custom_lcf), 
 					'New Value': event['data'].get(custom_lcf) 
 				})
