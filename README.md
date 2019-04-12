@@ -1,6 +1,6 @@
 # closeio-api-scripts
 
-Example Python scripts for interacting with [Close.io](http://close.io/) through its [API](http://developer.close.io/)
+Example Python scripts for interacting with [Close](http://close.com/) through its [API](http://developer.close.com/)
 using the [closeio_api Python client](https://github.com/closeio/closeio-api).
 
 ## Install basic dependencies
@@ -26,7 +26,7 @@ python scripts/run_leads_deleted_report.py -k MYAPIKEY
 
 ```
 
-If you have any questions, please contact [support@close.io](mailto:support@close.io?Subject=API%20Scripts).
+If you have any questions, please contact [support@close.com](mailto:support@close.com?Subject=API%20Scripts).
 
 ---
 
@@ -58,4 +58,4 @@ Multiple contacts will be grouped in the same lead if multiple rows have the sam
 
 3. Run the import script: `./scripts/csv_to_cio.py --api_key YOUR_API_KEY_HERE ~/path/to/your/leads.csv`
 
-You can generate an API Key from Settings in Close.io.
+You can generate an API Key from Settings in Close.
