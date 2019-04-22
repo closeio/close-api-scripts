@@ -1,5 +1,3 @@
-##### Get the Close calls for a large org (via API Key). 
-
 import sys
 import json
 from datetime import datetime, timedelta
