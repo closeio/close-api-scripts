@@ -36,16 +36,19 @@ has_more = True
 offset = 0 
 calls = []
 display_names = {}
-query = '(has:calls'
 
-if args.start_date:
-    params['date_created__gte'] = args.start_date
-    query = query + ' date >= "%s"' % args.start_date
+if not arg.start_date and not arg.end_date:
+    query = 'has:calls'
+else:
+    query = 'call('
+    if args.start_date:
+        params['date_created__gte'] = args.start_date
+        query = query + ' date >= "%s"' % args.start_date
 
-if args.end_date:
-    params['date_created__lte'] = args.end_date
-    query = query + ' date <= "%s"' % args.end_date
-query = query + ")"
+    if args.end_date:
+        params['date_created__lte'] = args.end_date
+        query = query + ' date <= "%s"' % args.end_date
+    query += ")"
 
 if args.user_id:
     params['user_id'] = args.user_id
