@@ -50,7 +50,6 @@ lead columns:
     * address[0-9]_state                - state
     * address[0-9]_address_1            - text part 1
     * address[0-9]_address_2            - text part 2
-
 opportunity columns (new items will be added if all values filled):
     * opportunity[0-9]_note             - opportunity note
     * opportunity[0-9]_value            - opportunity value in cents
@@ -58,17 +57,14 @@ opportunity columns (new items will be added if all values filled):
     * opportunity[0-9]_confidence       - opportunity confidence
     * opportunity[0-9]_status           - opportunity status
     * opportunity[0-9]_date_won         - opportunity date won
-
 contact columns (new contacts wil be added):
     * contact[0-9]_name                 - contact name
     * contact[0-9]_title                - contact title
     * contact[0-9]_phone[0-9]           - contact phones
     * contact[0-9]_email[0-9]           - contact emails
     * contact[0-9]_url[0-9]             - contact urls
-
 custom columns (new custom field will be created if not exists):
     * custom.[custom_field_name]        - value of custom_field_name
-
 """)
 
 parser.add_argument('csvfile', type=argparse.FileType('rU'), help='csv file')
@@ -116,12 +112,14 @@ error_array.append(header_row)
 
 api = CloseIO_API(args.api_key, development=args.development)
 org_id = api.get('api_key/' + args.api_key)['organization_id']
-org_name = api.get('organization/' + org_id)['name']
+org = api.get('organization/' + org_id)
+org_name = org['name']
 
-resp = api.get('custom_fields/lead')
-available_custom_fieldnames = [x['name'] for x in resp['data']]
+resp = org['lead_custom_fields']
+available_custom_fieldnames = [x['name'] for x in resp]
 new_custom_fieldnames = [x for x in [y.split('.', 1)[1] for y in c.fieldnames if y.startswith('custom.')]
                          if x not in available_custom_fieldnames]
+multi_select_fields = [x['name'] for x in resp if x['accepts_multiple_values']]
 
 if new_custom_fieldnames:
     if args.create_custom_fields:
@@ -193,10 +191,17 @@ for r in c:
     if addresses:
         payload['addresses'] = addresses
 
-    custom_patches = {key: r[key] for key in r if key.startswith('custom.')
-              and key.split('.', 1)[1] in available_custom_fieldnames and r[key]}
+    custom_keys = [key for key in r if key.startswith('custom.')
+              and key.split('.', 1)[1] in available_custom_fieldnames and r[key]]
+    custom_patches = {}
+    for key in custom_keys:
+        if key.replace('custom.', "") in multi_select_fields:
+            custom_patches[key] = [i.strip() for i in r[key].split(';')]
 
-    if custom_patches:
+        else:
+            custom_patches[key] = r[key]
+
+    if custom_patches and custom_patches != {}:
         payload.update(custom_patches)
 
     if r.get(unique_field):
@@ -206,9 +211,7 @@ for r in c:
         lead = None
         if r.get('lead_id') is not None:
             # exists lead
-            resp = api.get('lead/%s' % r['lead_id'], params={
-                'fields': 'id'
-            })
+            resp = api.get('lead/%s' % r['lead_id'])
             logging.debug('received: %s' % resp)
             lead = resp
 
@@ -247,6 +250,10 @@ for r in c:
         if lead:
             logging.debug('to sent: %s' % payload)
             if args.confirmed:
+                if len(multi_select_fields) > 0 and lead.get('custom'):
+                    for key in multi_select_fields:
+                        if payload.get('custom.' + key) and lead['custom'].get(key):
+                            payload['custom.' + key] = lead['custom'][key] + payload['custom.' + key]
                 api.put('lead/' + lead['id'], data=payload)
             logging.info('line %d updated: %s %s' % (c.line_num,
                                                      lead['id'],
