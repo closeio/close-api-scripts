@@ -138,6 +138,3 @@ if args.field in ['all', 'email', 'phone']:
 		## Sort the duplicates alphabetically and write them to a CSV
 		phone_duplicates = sorted(phone_duplicates, key=itemgetter('Phone Number'))
 		writeCSV("Phone", phone_duplicates, ['Phone Number', 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
-
-
-
