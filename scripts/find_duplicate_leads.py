@@ -73,33 +73,23 @@ print "Getting Leads..."
 pool.map(getLeadsSlice, slices)
 leads = sorted(leads, key=itemgetter('date_created'))
 
-if args.field in ['all', 'lead_name']:
-	lead_name_duplicates = []
-	keys_with_dupes_lead_name = []
-	print "Getting lead name duplicate data..."  
-
-	## Get a list of lead names that appear more than once
-	lead_names = {}
-	for lead in leads: 
+## Process duplicates
+lead_names = {}
+emails = {}
+phones = {}
+keys_with_dupes_lead_name = []
+keys_with_dupes_email = []
+keys_with_dupes_phone = []
+for lead in leads:
+	if args.field in ['all', 'lead_name']:
+		## Pouplate a dictionary of duplicate lead names, and keep track of those that appear more than once
 		lower_name = lead['display_name'].strip().lower()
 		if lead_names.get(lower_name) and lead not in lead_names[lower_name]:
 			lead_names[lower_name].append(lead)
 			keys_with_dupes_lead_name.append(lower_name)
 		elif not lead_names.get(lower_name):
 			lead_names[lower_name] = [lead]
-	keys_with_dupes_lead_name = list(set(keys_with_dupes_lead_name))
-	pool.map(getDuplicatesForLeadName, keys_with_dupes_lead_name)
-
-	## Sort the duplicates alphabetically and write them to a CSV
-	lead_name_duplicates = sorted(lead_name_duplicates, key=itemgetter('Lead Name'))
-	writeCSV("Lead Name", lead_name_duplicates, ['Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
-
-if args.field in ['all', 'email', 'phone']:
-	emails = {}
-	phones = {}
-	keys_with_dupes_email = []
-	keys_with_dupes_phone = []
-	for lead in leads:
+	if args.field in ['all', 'email', 'phone']:
 		for contact in lead['contacts']:
 			## Populate a dictionary of emails, and keep track of those that appear more than once
 			if args.field in ['all', 'email']:
@@ -118,23 +108,33 @@ if args.field in ['all', 'email', 'phone']:
 						keys_with_dupes_phone.append(phone['phone'])
 					elif not phones.get(phone['phone']):
 						phones[phone['phone']] = [lead]
-	
-	if args.field in ['all', 'email']:
-		email_duplicates = []
-		print "Getting email duplicate data..."
-		keys_with_dupes_email = list(set(keys_with_dupes_email))
-		pool.map(getDuplicatesForEmail, keys_with_dupes_email)
+						
+if args.field in ['all', 'lead_name']:
+	lead_name_duplicates = []
+	print "Getting lead name duplicate data..."
+	keys_with_dupes_lead_name = list(set(keys_with_dupes_lead_name))
+	pool.map(getDuplicatesForLeadName, keys_with_dupes_lead_name)
 
-		## Sort the duplicates alphabetically and write them to a CSV
-		email_duplicates = sorted(email_duplicates, key=itemgetter('Email Address'))
-		writeCSV("Email", email_duplicates, ['Email Address', 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
+	## Sort the duplicates alphabetically and write them to a CSV
+	lead_name_duplicates = sorted(lead_name_duplicates, key=itemgetter('Lead Name'))
+	writeCSV("Lead Name", lead_name_duplicates, ['Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
 
-	if args.field in ['all', 'phone']:
-		phone_duplicates = []
-		print "Getting phone duplicate data..."
-		keys_with_dupes_phone = list(set(keys_with_dupes_phone)) 
-		pool.map(getDuplicatesForPhone, keys_with_dupes_phone)
+if args.field in ['all', 'email']:
+	email_duplicates = []
+	print "Getting email duplicate data..."
+	keys_with_dupes_email = list(set(keys_with_dupes_email))
+	pool.map(getDuplicatesForEmail, keys_with_dupes_email)
 
-		## Sort the duplicates alphabetically and write them to a CSV
-		phone_duplicates = sorted(phone_duplicates, key=itemgetter('Phone Number'))
-		writeCSV("Phone", phone_duplicates, ['Phone Number', 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
+	## Sort the duplicates alphabetically and write them to a CSV
+	email_duplicates = sorted(email_duplicates, key=itemgetter('Email Address'))
+	writeCSV("Email", email_duplicates, ['Email Address', 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
+
+if args.field in ['all', 'phone']:
+	phone_duplicates = []
+	print "Getting phone duplicate data..."
+	keys_with_dupes_phone = list(set(keys_with_dupes_phone)) 
+	pool.map(getDuplicatesForPhone, keys_with_dupes_phone)
+
+	## Sort the duplicates alphabetically and write them to a CSV
+	phone_duplicates = sorted(phone_duplicates, key=itemgetter('Phone Number'))
+	writeCSV("Phone", phone_duplicates, ['Phone Number', 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
