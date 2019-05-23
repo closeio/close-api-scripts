@@ -1,79 +1,109 @@
 import sys
 import argparse
-import logging
 from closeio_api import Client as CloseIO_API, APIError
+from dateutil.relativedelta import relativedelta
+from datetime import datetime, timedelta
 import base64
 import requests
+from operator import itemgetter
+import csv
+import gevent
+import gevent.monkey
+from gevent.pool import Pool
+reload(sys)
+sys.setdefaultencoding('utf-8')
+gevent.monkey.patch_all()
 
 
 parser = argparse.ArgumentParser(description='Bulk Download Close.io Call Recordings into a specified Folder')
-
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--development', '-d', action='store_true',
-                    help='Use a development (testing) server rather than production.')
-parser.add_argument('--start-date', '-s',
+parser.add_argument('--date_start', '-s', required=True, 
                     help='The start of the date range you want to download recordings for in yyyy-mm-dd format.')
-parser.add_argument('--end-date', '-e',
+parser.add_argument('--date_end', '-e', required=True,
                     help='The end of the date range you want to download recordings for in yyyy-mm-dd format.')
 parser.add_argument('--file-path', '-f', required=True, 
                     help='The file path to the folder where the recordings will be stored.')
-
 args = parser.parse_args()
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 api_encoded = "Basic " + str(base64.b64encode(args.api_key))
+org_id = api.get('api_key/' + args.api_key, params={ '_fields': 'organization_id' })['organization_id']
+org_name = api.get('organization/' + org_id, params={ '_fields': 'name' })['name'].replace('/', '')
+days = []
+calls = []
+downloaded_calls = []
+starting_date = datetime.strptime(args.date_start, '%Y-%m-%d')
+ending_date = starting_date + relativedelta(days=+1) - relativedelta(seconds=+1)
+ending_date_final = datetime.strptime(args.date_end, '%Y-%m-%d')
 
-has_more = True
-offset = 0 
-leads = {}
+## Generate a list of days to cycle through in the date range
+while starting_date < ending_date_final:
+	starting_date_string = datetime.strftime(starting_date, "%Y-%m-%dT%H:%M:%S")
+	ending_date_string = datetime.strftime(ending_date, "%Y-%m-%dT%H:%M:%S")
+	days.append({
+		'day': starting_date.strftime('%Y-%m-%d'),
+		'start_date': starting_date_string,
+		'end_date': ending_date_string
+	})
+	starting_date = starting_date + relativedelta(days=+1)
+	ending_date = starting_date + relativedelta(days=+1) - relativedelta(seconds=+1)
 
-params = {}
-query = "call((recording_duration > 0 or voicemail_duration > 0)"
+## Method to get all of the recordings for a specific day.
+def getRecordedCalls(day):
+	print("Getting all recorded call activities for %s..." % (day['day']))
+	has_more = True
+	offset = 0
+	while has_more:
+		resp = api.get('activity/call', params={'_skip': offset, 'date_created__gte': day['start_date'], 'date_created__lte': day['end_date'],  '_fields': 'id,recording_url,voicemail_url,date_created,lead_id,duration,voicemail_duration,date_created' })
+		for call in resp['data']:
+			if (call['duration'] > 0 or call['voicemail_duration'] > 0) and (call.get('recording_url') or call.get('voicemail_url')):
+					call['url'] = call.get('recording_url', call.get('voicemail_url'))
+					if call['duration'] > 0:
+						call['Type'] = 'Answered Call'
+						call['Answered or Voicemail Duration'] = call['duration']
+					else:
+						call['Type'] = 'Voicemail'
+						call['Answered or Voicemail Duration'] = call['voicemail_duration']
+					calls.append(call)
+		offset += len(resp['data'])
+		has_more = resp['has_more']
 
-if args.start_date:
-	params['date_created__gte'] = args.start_date
-	query = query + ' date >= "%s"' % args.start_date
+pool = Pool(5)
+pool.map(getRecordedCalls, days)
 
-if args.end_date:
-	params['date_created__lte'] = args.end_date
-	query = query + ' date <= "%s"' % args.end_date
-query = query + ")"
+## Sort all calls by date_created to be in order because they were pulled in parallel
+calls = sorted(calls, key=itemgetter('date_created'), reverse=True)
 
-while has_more:
-	
-	resp = api.get('lead', params={'_skip':offset, 'query':query, '_fields':'id,display_name'})
-	for lead in resp['data']:
-		leads[lead['id']] = lead['display_name']
-		
-	offset+=len(resp['data'])
-	has_more = resp['has_more']
+## Method to download a call recording or voicemail recording
+def downloadCall(call):
+	try:
+		call_title = "close-recording-%s.mp3" % call['id']
+		doc = requests.get(call['url'], headers={ 'Content-Type': 'application/json', 'Authorization' : api_encoded })
+		with open("%s/%s" % (args.file_path, call_title), 'wb') as f:
+			f.write(doc.content)
+		downloaded_calls.append({
+			'Call Activity ID': call['id'],
+			'Date Created': call['date_created'],
+			'Type': call['Type'],
+			'Duration': call['Answered or Voicemail Duration'],
+			'Lead ID': call['lead_id'],
+			'Filename': call_title,
+			'url': call['url']
+		})
+		print "%s of %s: Downloading %s" % (calls.index(call) + 1, len(calls), call_title)
+	except Exception as e:
+		print e
 
-has_more = True
-offset = 0
-params['_fields'] = 'recording_url,voicemail_url,date_created,lead_id,duration,voicemail_duration'
-while has_more:
-	params['_skip'] = offset
-	resp_calls = api.get('activity/call', params=params)
-	for call in resp_calls['data']:
-		if call['duration'] > 0 or call['voicemail_duration'] > 0: 
-			lead_name = "Detached Call" 
-			if 'lead_id' in call and call['lead_id'] != None and call['lead_id'] in leads:
-				lead_name = leads[call['lead_id']]
-			call_title = lead_name + " " + call['date_created'] + ".mp3"
-			call_title = call_title.replace('/', '_').replace(' ', '_')
-			if 'recording_url' in call and call['recording_url'] != None: 
-				try:
-					doc = requests.get(call['recording_url'], headers={'Content-Type':'application/json', 'Authorization':api_encoded})
-					with open("%s/%s" % (args.file_path, call_title), 'wb') as f:
-						f.write(doc.content)
-				except Exception as e:
-					print e
-			elif 'voicemail_url' in call and call['voicemail_url'] != None: 
-				try:
-					doc = requests.get(call['voicemail_url'], headers={'Content-Type':'application/json', 'Authorization':api_encoded})
-					with open("%s/Voicemail %s" % (args.file_path, call_title), 'wb') as f:
-						f.write(doc.content)
-				except Exception as e:
-					print e
-	offset+=len(resp_calls['data'])
-	has_more = resp_calls['has_more']
+pool.map(downloadCall, calls)
+
+## Sort all downloaded calls by date_created to be in order because they were pulled in parallel
+downloaded_calls = sorted(downloaded_calls, key=itemgetter('Date Created'), reverse=True)
+## Write Filename Output to CSV
+f = open('%s/%s Downloaded Call Recordings from %s to %s Reference.csv' % (args.file_path, org_name, args.date_start, args.date_end), 'wt')
+try:
+	ordered_keys = ['Call Activity ID', 'Filename', 'Date Created', 'Type', 'Duration', 'Lead ID', 'url']
+	writer = csv.DictWriter(f, ordered_keys)
+	writer.writeheader()
+	writer.writerows(downloaded_calls)
+finally:
+    f.close()
