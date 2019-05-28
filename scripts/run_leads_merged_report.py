@@ -52,7 +52,8 @@ while has_more:
 					'Destination Lead Status': event['data']['status_label'],
 					'Destination Lead ID': event['meta']['merge_destination_lead_id'],
 					'Source Lead ID': event['meta']['merge_source_lead_id'],
-					'Merge Event ID': event['id']
+					'Merge Event ID': event['id'],
+					'Close API Request ID': event['request_id']
 				} 
 
 				if event.get('user_id') and event['user_id'] in users:
@@ -73,7 +74,7 @@ pool.map(getSourceLeadData, events)
 ## Write data to a CSV
 f = open('%s Merge Lead Events in Last 30 Days.csv' % org_name, 'wt')
 try:
-	ordered_keys = ['Merge Event ID', 'Date', 'User', 'Destination Lead Name', 'Destination Lead Status', 'Destination Lead ID', 'Source Lead Name', 'Source Lead Status', 'Source Lead ID', 'Current Lead URL']
+	ordered_keys = ['Merge Event ID', 'Close API Request ID', 'Date', 'User', 'Destination Lead Name', 'Destination Lead Status', 'Destination Lead ID', 'Source Lead Name', 'Source Lead Status', 'Source Lead ID', 'Current Lead URL']
 	writer = csv.DictWriter(f, ordered_keys)
 	writer.writeheader()
 	writer.writerows(events)
