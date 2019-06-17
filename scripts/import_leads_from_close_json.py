@@ -20,7 +20,7 @@ me = api.get('me')
 org = api.get('organization/' + me['organizations'][0]['id'], params={ '_fields': 'memberships,inactive_memberships,name' })
 org_name = org['name']
 active_users = [i['user_id'] for i in org['memberships']]
-all_users = active_users + [i for i in org['inactive_memberships']]
+all_users = active_users + [i['user_id'] for i in org['inactive_memberships']]
 apikey_user_id = me['id']
 
 ## Create a list of lead and opportunity statuses currently in the org
@@ -101,7 +101,7 @@ def importTasks(task_data, new_lead_id):
 
 ## Import call, note, and SMS data to new lead. Assume that emails will be brought over via email sync.
 def importActivities(activity_data, new_lead_id):
-	types = { 'Call': 'activity/call', 'SMS': 'activity/sms', 'Note': 'activity/note'}
+	types = { 'Call': 'activity/call', 'SMS': 'activity/sms', 'Note': 'activity/note' }
 	for activity in activity_data:
 		if 'organization_id' in activity:
 			del activity['organization_id']
@@ -142,15 +142,18 @@ def restoreLead(lead):
 	lead_data['name'] = lead['display_name']
 	lead_data['date_created'] = lead['date_created']
 	lead_data['created_by'] = lead['created_by']
-	lead_data['custom'] = lead['custom']
 	lead_data['url'] = lead['url']
 
 	## Clear users ids that have never been in the new Close org from user type custom fields:
-	for custom in lead_data['custom']:
-		if lead_data['custom'].get(custom) and str(lead_data['custom'][custom]).startswith('user_') and lead_data['custom'][custom] not in all_users:
-			lead_data['custom'][custom] = None
-
+	custom_data = copy.deepcopy(lead['custom'])
+	for custom in lead['custom']:
+		if lead['custom'].get(custom) and str(lead['custom'][custom]).startswith('user_') and lead['custom'][custom] not in all_users:
+			del custom_data[custom]
+	lead_data['custom'] = custom_data
 	lead_data['custom']['Original Lead ID'] = lead['id']
+
+
+	## Remove lead references from old contacts before posting to new leads
 	contacts = copy.deepcopy(lead['contacts'])
 	for contact in contacts:
 		del contact['id']
@@ -179,7 +182,8 @@ def restoreLead(lead):
 				importActivities(activity_array, new_lead_id)
 			total_leads_imported.append(new_lead_id)
 			print "%s: Imported %s" % (len(total_leads_imported), lead['id'])
-	except APIError as e:
+	
+	except Exception as e:
 		print "%s: Lead could not be posted because %s" % (lead['id'], str(e))
 		errored_leads.append(lead)
 
