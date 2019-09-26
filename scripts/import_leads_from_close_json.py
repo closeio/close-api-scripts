@@ -143,6 +143,7 @@ def restoreLead(lead):
 	lead_data['date_created'] = lead['date_created']
 	lead_data['created_by'] = lead['created_by']
 	lead_data['url'] = lead['url']
+	lead_data['description'] = lead['description']
 
 	## Clear users ids that have never been in the new Close org from user type custom fields:
 	custom_data = copy.deepcopy(lead['custom'])
