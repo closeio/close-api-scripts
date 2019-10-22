@@ -2,8 +2,6 @@ import sys
 import argparse
 from closeio_api import Client as CloseIO_API, APIError
 import csv
-reload(sys)
-sys.setdefaultencoding('utf-8')
 
 parser = argparse.ArgumentParser(description='Export a list of custom field changes for a specific custom field')
 

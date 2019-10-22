@@ -5,8 +5,6 @@ from datetime import datetime, timedelta
 import time
 from dateutil import tz
 import csv
-reload(sys)
-sys.setdefaultencoding('utf-8')
 
 parser = argparse.ArgumentParser(description='Get Time To Respond Metrics From Org')
 

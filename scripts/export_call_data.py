@@ -3,8 +3,6 @@ import argparse
 import logging
 from closeio_api import Client as CloseIO_API, APIError
 import csv
-reload(sys)
-sys.setdefaultencoding('utf-8')
 
 
 parser = argparse.ArgumentParser(description='Download a CSV of calls from/to a specific Close.io number over a specified time range')

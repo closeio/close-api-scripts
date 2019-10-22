@@ -8,8 +8,6 @@ import urlparse
 import gevent
 import gevent.monkey
 from gevent.pool import Pool
-reload(sys)
-sys.setdefaultencoding('utf-8')
 gevent.monkey.patch_all()
 pool = Pool(7)
 

@@ -4,8 +4,6 @@ import logging
 from closeio_api import Client as CloseIO_API, APIError
 import json
 import csv
-reload(sys)
-sys.setdefaultencoding('utf-8')
 
 
 parser = argparse.ArgumentParser(description='Create a CSV of all deleted leads in the past 30 days and see how they were deleted')
