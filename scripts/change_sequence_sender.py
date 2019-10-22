@@ -1,5 +1,5 @@
-import sys
 import argparse
+
 from closeio_api import Client as CloseIO_API, APIError
 
 parser = argparse.ArgumentParser(description='Change sequence sender for specific user')
@@ -18,22 +18,22 @@ offset = 0
 from_subs = []
 count = 0
 
-print "Getting sequence subscriptions"
+print("Getting sequence subscriptions")
 
 while has_more:
 	sub_results = api.get('sequence_subscription', params={ '_skip': offset, 'fields': 'id,sender_email,sender_name,sender_account_id,status' })
 	from_subs += [i for i in sub_results['data'] if i['sender_email'] == args.from_email and i['status'] in ['active', 'paused']]
 	offset += len(sub_results['data'])
-	print offset
+	print(offset)
 	has_more = sub_results['has_more']
 
-print "Total subscriptions: %s" % len(from_subs)
-print "Updating subscriptions"
+print(f"Total subscriptions: {len(from_subs)}")
+print("Updating subscriptions")
 
 for sub in from_subs:
 	try:
 		api.put('sequence_subscription/' + sub['id'], data={ 'sender_name': args.sender_name, 'sender_account_id': args.sender_account_id, 'sender_email': args.to_email })
 		count += 1
-		print "%s: %s" % (count, sub['id'])
+		print(f"{count}: {sub['id']}")
 	except APIError as e:
-		print "Can't update sequence %s because %s" % (sub['id'], str(e))
+		print(f"Can't update sequence {sub['id']} because {str(e)}")

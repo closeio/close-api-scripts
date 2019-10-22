@@ -5,7 +5,7 @@ import argparse
 import logging
 import time
 
-from closeio_api import Client as CloseIO_API, APIError
+from closeio_api import Client as CloseIO_API
 
 
 def run(api_key, development, confirmed, limit=100):
@@ -28,7 +28,7 @@ def run(api_key, development, confirmed, limit=100):
         for lead in leads:
             if len(lead['addresses']) < 2:
                 logging.warning("unexpected result: %s", lead)
-                continue # this shouldn't happen based on the search query, but just to be safe...
+                continue  # this shouldn't happen based on the search query, but just to be safe...
             if confirmed:
                 api.put('lead/' + lead['id'], data={'addresses': lead['addresses'][:1]})
             logging.info("removed %d extra address(es) for %s\n%s" % (len(lead['addresses'][1:]), lead['id'], lead['addresses'][1:]))

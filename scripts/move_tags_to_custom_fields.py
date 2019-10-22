@@ -1,12 +1,12 @@
 import argparse
 import csv
+
 from closeio_api import Client as CloseIO_API
 
 parser = argparse.ArgumentParser(description='Splits up a "Tags" custom field into separate custom fields, as described by a CSV file with columns "tag", "custom_field_name", "custom_field_value"')
 parser.add_argument('csvfile', type=argparse.FileType('rU'), help='csv file')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--development', '-d', action='store_true',
-                    help='Use a development (testing) server rather than production.')
+parser.add_argument('--development', '-d', action='store_true', help='Use a development (testing) server rather than production.')
 
 args = parser.parse_args()
 
@@ -45,9 +45,9 @@ while has_more:
                 if t_lower in tag_templates.keys():
                     new_fields['custom.' + tag_templates[t_lower][0]] = tag_templates[t_lower][1]
 
-            print l['id'], 'Tags:', l['custom']['Tags']
-            print '...', new_fields
-            api.put('lead/'+l['id'], data=new_fields)
+            print(l['id'], 'Tags:', l['custom']['Tags'])
+            print('...', new_fields)
+            api.put('lead/' + l['id'], data=new_fields)
 
     offset += len(leads)
     has_more = resp['has_more']

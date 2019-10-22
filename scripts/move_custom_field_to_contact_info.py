@@ -3,6 +3,7 @@ import click
 from closeio_api import Client as CloseIO_API
 from closeio_api import APIError
 
+
 @click.command()
 @click.option('-k', '--api-key', required=True, help='API key')
 @click.option('--confirmed', is_flag=True, help='Without this flag, the script will do a dry run without actually updating any data.')
@@ -12,18 +13,18 @@ from closeio_api import APIError
 @click.option('--phones_custom_field', default='all phones', help='Name of the custom field containing phones that should be moved into a contact.')
 @click.option('--emails_custom_field', default='all emails', help='Name of the custom field containing emails that should be moved into a contact.')
 @click.option('--title_custom_field', default='contact title', help='Name of the custom field containing a contact\'s title.')
-def run(api_key, confirmed, development=False, use_existing_contact=False, new_contact_name='', phones_custom_field='all phones', emails_custom_field='all emails'):
+def run(api_key, confirmed, development=False, use_existing_contact=False, new_contact_name='', phones_custom_field='all phones', emails_custom_field='all emails', title_custom_field='contact title'):
     """
     After an import from a different CRM, for all leads, move emails and phones that were put in
     in a lead custom field to the lead's first contact (if--use_existing_contact flag was used)
     or create a new contact.
     """
 
-    print 'confirmed:', `confirmed`
-    print 'phones_custom_field:', `phones_custom_field`
-    print 'emails_custom_field:', `emails_custom_field`
-    print 'title_custom_field:', `title_custom_field`
-    print 'use_existing_contact:', `use_existing_contact`
+    print(f'confirmed: {confirmed}')
+    print(f'phones_custom_field: {phones_custom_field}')
+    print(f'emails_custom_field: {emails_custom_field}')
+    print(f'title_custom_field: {title_custom_field}')
+    print(f'use_existing_contact: {use_existing_contact}')
 
     api = CloseIO_API(api_key, development=development)
     has_more = True
@@ -50,7 +51,7 @@ def run(api_key, confirmed, development=False, use_existing_contact=False, new_c
             if not company_phones and not company_emails and not contact_title:
                 continue
 
-            if company_emails :
+            if company_emails:
                 if company_emails.startswith('["'):
                     company_emails = company_emails[2:-2].split('", "')
                 else:
@@ -74,43 +75,43 @@ def run(api_key, confirmed, development=False, use_existing_contact=False, new_c
                     contact['name'] = new_contact_name
 
             for pn in company_phones:
-                contact['phones'].append({ 'type': 'office', 'phone': pn })
+                contact['phones'].append({'type': 'office', 'phone': pn})
             for e in company_emails:
-                contact['emails'].append({ 'type': 'office', 'email': e })
+                contact['emails'].append({'type': 'office', 'email': e})
             if contact_title:
                 contact['title'] = contact_title
 
-            print 'Lead:', lead['id'], lead['name'].encode('utf8')
-            print 'Emails:', `custom.get(emails_custom_field)`, ' => ', `company_emails`
-            print 'Phones:', `custom.get(phones_custom_field)`, ' => ', `company_phones`
-            print 'Title:', `custom.get(title_custom_field)`, ' => ', `contact_title`
+            print('Lead:', lead['id'], lead['name'].encode('utf8'))
+            print(f'Emails: {custom.get(emails_custom_field)} => {company_emails}')
+            print(f'Phones: {custom.get(phones_custom_field)} => {company_phones}')
+            print(f'Title: {custom.get(title_custom_field)} => {contact_title}')
 
             try:
                 if contact.get('id'):
-                    print 'Updating an existing contact', contact['id']
+                    print('Updating an existing contact', contact['id'])
                     if confirmed:
                         api.put('contact/%s' % contact['id'], data={
                             'phones': contact['phones'],
                             'emails': contact['emails'],
                         })
                 else:
-                    print 'Creating a new contact'
+                    print('Creating a new contact')
                     if confirmed:
                         api.post('contact', data=contact)
-                print 'Payload:', contact
+                print('Payload:', contact)
                 if confirmed:
                     api.put('lead/%s' % lead['id'], data={
                         'custom.Migration completed': 'Yes'
                     })
             except APIError as e:
-                print e
-                print 'Payload:', contact
+                print(str(e))
+                print('Payload:', contact)
                 if confirmed:
                     api.put('lead/%s' % lead['id'], data={
                         'custom.Migration completed': 'skipped'
                     })
 
-            print ''
+            print()
 
         if not confirmed:
             # If we don't actually update the "Migration completed" custom field,
@@ -119,8 +120,8 @@ def run(api_key, confirmed, development=False, use_existing_contact=False, new_c
 
         has_more = resp['has_more']
 
-    print 'Done'
+    print('Done')
+
 
 if __name__ == '__main__':
     run()
-

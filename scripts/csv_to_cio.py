@@ -1,13 +1,20 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import time, argparse, re, unidecode, sys, json
+
+import argparse
+import json
+import re
+import sys
+import time
+
+import closeio_api
+import unidecode
+from closeio_api import Client as CloseIO_API
+from closeio_api.utils import CsvReader, count_lines, title_case, uncamel
 from progressbar import ProgressBar
 from progressbar.widgets import Percentage, Bar, ETA, FileTransferSpeed
 from requests.exceptions import ConnectionError
-import closeio_api
-from closeio_api import Client as CloseIO_API
-from closeio_api.utils import CsvReader, count_lines, title_case, uncamel
 
 parser = argparse.ArgumentParser(description='Import leads from CSV file')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
@@ -74,10 +81,10 @@ custom_headers = list(set(normalized_headers) - set(expected_headers)) # non-rec
 custom_headers = [ header[header_indices[normalized_col]] for normalized_col in custom_headers ]
 
 print("\nRecognized these column names:")
-print('> %s' % ', '.join(expected_headers))
+print(f'> {", ".join(expected_headers)}')
 if len(custom_headers):
     print("\nThe following column names weren't recognized, and will be imported as custom fields:")
-    print('> %s' % ', '.join(custom_headers))
+    print(f'> {", ".join(custom_headers)}')
     print('')
 
 def value_in_row(row, field):
@@ -192,13 +199,13 @@ for i, row in enumerate(reader):
     elif lead['contacts'] not in unique_leads[grouper]['contacts']:
         unique_leads[grouper]['contacts'].extend(lead['contacts'])
 
-print('Found %d leads (grouped by company) from %d contacts.' % (len(unique_leads), import_count))
+print(f'Found {len(unique_leads)} leads (grouped by company) from {import_count} contacts.')
 
 print('\nHere is a sample lead (last row):')
 print(json.dumps(unique_leads[grouper], indent=4))
 
 print('\nAre you sure you want to continue? (y/n) ')
-if raw_input('') != 'y':
+if input('') != 'y':
     sys.exit()
 
 ##############################################################################
@@ -270,7 +277,7 @@ for key, val in unique_leads.items():
 
 pbar.finish()
 
-print('Successful responses: %d of %d' % (success_cnt, len(unique_leads)))
+print(f'Successful responses: {success_cnt} of {len(unique_leads)}')
 if args.skip_duplicates:
-    print('Duplicates: %d' % dupes_cnt)
+    print(f'Duplicates: {dupes_cnt}')
 

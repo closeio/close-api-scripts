@@ -15,17 +15,14 @@ group_to.add_argument('--to-user-id', '-t', type=str, help='')
 group_to.add_argument('--to-user-email', type=str, help='')
 
 parser.add_argument('--api-key', '-k', required=True, help='')
-parser.add_argument('--development', '-d', action='store_true',
-                    help='Use a development (testing) server rather than production.')
-parser.add_argument('--confirmed', '-c', action='store_true',
-                    help='Without this flag, the script will do a dry run without actually updating any data.')
+parser.add_argument('--development', '-d', action='store_true', help='Use a development (testing) server rather than production.')
+parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
 parser.add_argument('--continue-on-error', '-s', action='store_true', help='Do not abort after first error')
 group = parser.add_argument_group()
 group.add_argument('--tasks', '-T', action='store_true', help='reassign only non complete tasks')
 group.add_argument('--all-tasks', action='store_true', help='reassign all tasks')
 group.add_argument('--opportunities', '-O', action='store_true', help='reassign only active opportunities')
 group.add_argument('--all-opportunities', action='store_true', help='reassign all opportunities')
-
 
 args = parser.parse_args()
 
@@ -37,9 +34,9 @@ if not any([args.tasks, args.opportunities, args.all_tasks, args.all_opportuniti
 
 log_format = "[%(asctime)s] %(levelname)s %(message)s"
 if not args.confirmed:
-    log_format = 'DRY RUN: '+log_format
+    log_format = 'DRY RUN: ' + log_format
 logging.basicConfig(level=logging.INFO, format=log_format)
-logging.debug('parameters: %s' % vars(args))
+logging.debug(f'parameters: {vars(args)}')
 
 api = CloseIO_API(args.api_key, development=args.development)
 
@@ -60,7 +57,7 @@ if args.from_user_email:
     from_user_id = emails_to_ids[args.from_user_email]
 else:
     # for exception, if user_id is not present in the database
-    resp = api.get('user/'+args.from_user_id, params={
+    resp = api.get('user/' + args.from_user_id, params={
         '_fields': 'id,email'
     })
 
@@ -71,7 +68,7 @@ if args.to_user_email:
     to_user_id = emails_to_ids[args.to_user_email]
 
 else:
-    resp = api.get('user/'+args.to_user_id, params={
+    resp = api.get('user/' + args.to_user_id, params={
         '_fields': 'id,email'
     })
 
@@ -80,8 +77,8 @@ else:
 
 ids_to_emails = dict((v, k) for k, v in emails_to_ids.iteritems())
 
-logging.info('from user_id %s (%s)' % (from_user_id, ids_to_emails[from_user_id]))
-logging.info('to user_id: %s (%s)' % (to_user_id, ids_to_emails[to_user_id]))
+logging.info(f'from user_id {from_user_id} ({ids_to_emails[from_user_id]})')
+logging.info(f'to user_id: {to_user_id} ({ids_to_emails[to_user_id]})')
 
 assert from_user_id != to_user_id, 'equal user codes'
 
@@ -111,21 +108,21 @@ try:
                 if args.confirmed:
                     full_tasks.append(task['id'])
                 else:
-                    logging.info('updated %s' % task['id'])
+                    logging.info(f'updated {task["id"]}')
                     updated_tasks += 1
             offset += len(tasks)
             has_more = resp['has_more']
 
         for task_id in full_tasks:
             try:
-                api.put('task/'+task_id, data={'assigned_to': to_user_id})
-                logging.info('updated %s' % task_id)
+                api.put('task/' + task_id, data={'assigned_to': to_user_id})
+                logging.info(f'updated {task_id}')
                 updated_tasks += 1
             except APIError as e:
                 tasks_errors += 1
                 if not args.continue_on_error:
                     raise e
-                logging.error('task %s skipped with error %s' % (task['id'], e))
+                logging.error(f'task {task["id"]} skipped with error {str(e)}')
 
     # opportunities
     updated_opportunities = 0
@@ -150,24 +147,24 @@ try:
                 if args.confirmed:
                     full_opps.append(opportunity['id'])
                 else:
-                    logging.info('updated %s' % opportunity['id'])
+                    logging.info(f'updated {opportunity["id"]}')
                     updated_opportunities += 1
             offset += len(opportunities)
             has_more = resp['has_more']
 
         for opp_id in full_opps:
             try:
-                api.put('opportunity/'+ opp_id, data={'user_id': to_user_id})
-                logging.info('updated %s' % opp_id)
+                api.put('opportunity/' + opp_id, data={'user_id': to_user_id})
+                logging.info(f'updated {opp_id}')
                 updated_opportunities += 1
             except APIError as e:
                 opportunities_errors += 1
                 if not args.continue_on_error:
                     raise e
-                logging.error('opportunity %s skipped with error %s' % (opportunity['id'], e))
-except APIError:
-    logging.error('stopped on error %s' % e)
+                logging.error(f'opportunity {opportunity["id"]} skipped with error {str(e)}')
+except APIError as e:
+    logging.error(f'stopped on error {str(e)}')
 
-logging.info('summary: updated tasks %d, updated opportunities %d' % (updated_tasks, updated_opportunities))
+logging.info(f'summary: updated tasks {updated_tasks}, updated opportunities {updated_opportunities}')
 if opportunities_errors or tasks_errors:
-    logging.info('summary: tasks errors: %s, opportunities errors %d' % (tasks_errors, opportunities_errors))
+    logging.info(f'summary: tasks errors: {tasks_errors}, opportunities errors {opportunities_errors}')
