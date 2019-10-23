@@ -4,11 +4,11 @@ import math
 from operator import itemgetter
 
 import gevent.monkey
+gevent.monkey.patch_all()
 from urllib.parse import urlparse
 from closeio_api import Client as CloseIO_API
 from gevent.pool import Pool
 
-gevent.monkey.patch_all()
 pool = Pool(7)
 
 parser = argparse.ArgumentParser(description='Find duplicate leads in your Close org via lead name, email address, phone number, or lead url hostname')

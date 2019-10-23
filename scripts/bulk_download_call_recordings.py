@@ -5,7 +5,6 @@ from datetime import datetime
 from operator import itemgetter
 
 import gevent.monkey
-
 gevent.monkey.patch_all()
 import requests
 from closeio_api import Client as CloseIO_API

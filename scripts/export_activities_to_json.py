@@ -4,12 +4,10 @@ from datetime import datetime
 from operator import itemgetter
 
 import gevent.monkey
-import gevent.monkey
+gevent.monkey.patch_all()
 from closeio_api import Client as CloseIO_API
 from dateutil.relativedelta import relativedelta
 from gevent.pool import Pool
-
-gevent.monkey.patch_all()
 
 parser = argparse.ArgumentParser(description='Export Close activity data within a date range into a JSON file')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')

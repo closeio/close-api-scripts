@@ -1,10 +1,9 @@
 import argparse
 import csv
 import gevent.monkey
+gevent.monkey.patch_all()
 from closeio_api import Client as CloseIO_API, APIError
 from gevent.pool import Pool
-
-gevent.monkey.patch_all()
 
 parser = argparse.ArgumentParser(description='Get a list of all lead merge events for the last 30 days from your Close organization')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')

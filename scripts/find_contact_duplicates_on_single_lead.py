@@ -4,10 +4,10 @@ import math
 from operator import itemgetter
 
 import gevent.monkey
+gevent.monkey.patch_all()
 from closeio_api import Client as CloseIO_API
 from gevent.pool import Pool
 
-gevent.monkey.patch_all()
 pool = Pool(7)
 
 parser = argparse.ArgumentParser(description='Find duplicate contacts on a lead in your Close org via contact_name, email address, or phone number')
