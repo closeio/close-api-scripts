@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 import argparse
 import logging
@@ -78,14 +78,9 @@ args = parser.parse_args()
 
 log_format = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 if not args.confirmed:
-    log_format = 'DRY RUN: '+log_format
+    log_format = 'DRY RUN: ' + log_format
 logging.basicConfig(level=logging.INFO, format=log_format)
 logging.debug('parameters: %s' % vars(args))
-
-#if args.list_countries:
-#    for k,v in ISO_COUNTRIES.iteritems():
-#        print k, v
-#    sys.exit(0)
 
 args.old_code = args.old_code.upper()
 args.new_code = args.new_code.upper()
@@ -117,7 +112,7 @@ while has_more:
                 need_update = True
         if need_update:
             if args.confirmed:
-                api.put('lead/'+lead['id'], data={'addresses': lead['addresses']})
+                api.put('lead/' + lead['id'], data={'addresses': lead['addresses']})
             logging.info('updated %s' % lead['id'])
 
     offset += len(leads)
