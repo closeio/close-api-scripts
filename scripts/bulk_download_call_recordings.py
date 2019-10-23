@@ -5,12 +5,12 @@ from datetime import datetime
 from operator import itemgetter
 
 import gevent.monkey
+
+gevent.monkey.patch_all()
 import requests
 from closeio_api import Client as CloseIO_API
 from dateutil.relativedelta import relativedelta
 from gevent.pool import Pool
-
-gevent.monkey.patch_all()
 
 parser = argparse.ArgumentParser(description='Bulk Download Close.io Call Recordings into a specified Folder')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
@@ -20,8 +20,8 @@ parser.add_argument('--file-path', '-f', required=True, help='The file path to t
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
-api_encoded = "Basic " + str(base64.b64encode(args.api_key))
-org_id = api.get('api_key/' + args.api_key, params={'_fields': 'organization_id'})['organization_id']
+api_encoded = "Basic " + str(base64.b64encode(args.api_key.encode("utf-8")))
+org_id = api.get(f'api_key/{args.api_key}', params={'_fields': 'organization_id'})['organization_id']
 org_name = api.get('organization/' + org_id, params={'_fields': 'name'})['name'].replace('/', '')
 days = []
 calls = []
