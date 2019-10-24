@@ -40,7 +40,7 @@ object_types = ['contact', 'opportunity', 'task.lead', 'activity.call', 'activit
 contact_id_mapping = {}
 
 
-def restoreObjects(object_type, old_lead_id, new_lead_id):
+def restore_objects(object_type, old_lead_id, new_lead_id):
     has_more = True
     cursor = ''
     while has_more:
@@ -99,7 +99,7 @@ def restoreObjects(object_type, old_lead_id, new_lead_id):
         has_more = bool(resp_objects['cursor_next'])
 
 
-def removeTaskCompletedActivities(new_lead_id):
+def remove_task_completed_activities(new_lead_id):
     has_more = True
     offset = 0
     task_completed_ids = []
@@ -116,7 +116,7 @@ def removeTaskCompletedActivities(new_lead_id):
             print(f"Cannot delete completed task activity {completed_id} because {str(e)}")
 
 
-def restoreLead(old_lead_id):
+def restore_lead(old_lead_id):
     resp_lead = api.get('event', params={'object_type': 'lead', 'action': 'deleted', 'lead_id': old_lead_id})
     if len(resp_lead['data']) > 0 and resp_lead['data'][0].get('previous_data'):
         prev = resp_lead['data'][0]['previous_data']
@@ -129,11 +129,11 @@ def restoreLead(old_lead_id):
                 new_lead_id = post_lead['id']
                 # Restore all objects on the lead.
                 for object_type in object_types:
-                    restoreObjects(object_type, old_lead_id, new_lead_id)
+                    restore_objects(object_type, old_lead_id, new_lead_id)
 
                 # We want to remove task completed activities on the new lead because they will be posted at the top of the activity timeline
                 # regardless of when they were actually completed.
-                removeTaskCompletedActivities(new_lead_id)
+                remove_task_completed_activities(new_lead_id)
 
                 total_leads_restored.append(1)
                 print(f"{len(total_leads_restored)}: Restored {old_lead_id}")
@@ -145,6 +145,6 @@ def restoreLead(old_lead_id):
 
 print(f"Total leads being restored: {len(lead_ids)}")
 pool = Pool(5)
-pool.map(restoreLead, lead_ids)
+pool.map(restore_lead, lead_ids)
 print(f"Total leads restored {len(total_leads_restored)}")
 print(f"Total leads not restored {(len(lead_ids) - len(total_leads_restored))}")
