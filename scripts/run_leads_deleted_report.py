@@ -7,11 +7,10 @@ parser = argparse.ArgumentParser(description='Create a CSV of all deleted leads 
 
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
 parser.add_argument('--print-lead-ids', '-p', action='store_true', help='Use this field to print lead_ids deleted in an array at the end of the script')
-parser.add_argument('--development', '-d', action='store_true', help='Use a development (testing) server rather than production.')
 
 args = parser.parse_args()
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 
 has_more = True
 cursor = ''

@@ -21,7 +21,6 @@ parser = argparse.ArgumentParser(description='Import leads from CSV file')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
 parser.add_argument('--skip_duplicates', action='store_true', help='Skip leads that are already present in Close.io (determined by company name).')
 parser.add_argument('--no_grouping', action='store_true', help='Turn off the default group-by-company behavior.')
-parser.add_argument('--development', action='store_true', help='Use a development server rather than production.')
 parser.add_argument('file', help='Path to the csv file')
 args = parser.parse_args()
 
@@ -203,7 +202,7 @@ if input('') != 'y':
 
 ##############################################################################
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 
 progress_widgets = ['Importing %d rows: ' % import_count, Percentage(), ' ', Bar(), ' ', ETA(), ' ', FileTransferSpeed()]
 pbar = ProgressBar(widgets=progress_widgets, maxval=import_count).start()

@@ -7,11 +7,10 @@ parser = argparse.ArgumentParser(description="Change all the opportunities for a
 parser.add_argument('--query', type=str, required=True, help='Search query.')
 parser.add_argument('--api-key', type=str, required=True, help='API key')
 parser.add_argument('--status', type=str, required=True, help='Label of the new status')
-parser.add_argument('--dev', action='store_true', help='Use the dev server', default=False)
 args = parser.parse_args()
 
 # Should tell you how many leads are going to be affected
-api = CloseIO_API(args.api_key, development=args.dev)
+api = CloseIO_API(args.api_key)
 
 # Get the status_id
 org_id = api.get('api_key')['data'][0]['organization_id']

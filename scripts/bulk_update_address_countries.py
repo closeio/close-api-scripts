@@ -72,7 +72,6 @@ parser.add_argument('--list-countries', '-l', action='store_true', help='List of
 parser.add_argument('old_code', type=str, help='Old country code')
 parser.add_argument('new_code', type=str, help='New country code')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--development', '-d', action='store_true', help='Use a development (testing) server rather than production.')
 parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
 args = parser.parse_args()
 
@@ -91,7 +90,7 @@ assert args.old_code != args.new_code, 'equal country codes'
 logging.info('old country: %s (%s) -> new country: %s (%s) ' % (args.old_code, ISO_COUNTRIES[args.old_code],
                                                                 args.new_code, ISO_COUNTRIES[args.new_code]))
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 has_more = True
 offset = 0
 

@@ -7,13 +7,12 @@ from closeio_api import APIError
 @click.command()
 @click.option('-k', '--api-key', required=True, help='API key')
 @click.option('--confirmed', is_flag=True, help='Without this flag, the script will do a dry run without actually updating any data.')
-@click.option('--development', is_flag=True, help='Use a development (testing) server rather than production.')
 @click.option('--use_existing_contact', is_flag=True, help='Append the phone number from a custom field to an existing contact. If this flag is not used, a new contact will be created.')
 @click.option('--new_contact_name', default='', help="If --use_existing_contact flag was not set, or if a lead doesn't contain any contacts, this is the name of the contact that will be created.")
 @click.option('--phones_custom_field', default='all phones', help='Name of the custom field containing phones that should be moved into a contact.')
 @click.option('--emails_custom_field', default='all emails', help='Name of the custom field containing emails that should be moved into a contact.')
 @click.option('--title_custom_field', default='contact title', help='Name of the custom field containing a contact\'s title.')
-def run(api_key, confirmed, development=False, use_existing_contact=False, new_contact_name='', phones_custom_field='all phones', emails_custom_field='all emails', title_custom_field='contact title'):
+def run(api_key, confirmed, use_existing_contact=False, new_contact_name='', phones_custom_field='all phones', emails_custom_field='all emails', title_custom_field='contact title'):
     """
     After an import from a different CRM, for all leads, move emails and phones that were put in
     in a lead custom field to the lead's first contact (if--use_existing_contact flag was used)
@@ -26,7 +25,7 @@ def run(api_key, confirmed, development=False, use_existing_contact=False, new_c
     print(f'title_custom_field: {title_custom_field}')
     print(f'use_existing_contact: {use_existing_contact}')
 
-    api = CloseIO_API(api_key, development=development)
+    api = CloseIO_API(api_key)
     has_more = True
     offset = 0
 

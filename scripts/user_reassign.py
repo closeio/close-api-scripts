@@ -15,7 +15,6 @@ group_to.add_argument('--to-user-id', '-t', type=str, help='')
 group_to.add_argument('--to-user-email', type=str, help='')
 
 parser.add_argument('--api-key', '-k', required=True, help='')
-parser.add_argument('--development', '-d', action='store_true', help='Use a development (testing) server rather than production.')
 parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
 parser.add_argument('--continue-on-error', '-s', action='store_true', help='Do not abort after first error')
 group = parser.add_argument_group()
@@ -38,7 +37,7 @@ if not args.confirmed:
 logging.basicConfig(level=logging.INFO, format=log_format)
 logging.debug(f'parameters: {vars(args)}')
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 
 emails_to_ids = {}
 if any([args.from_user_email, args.to_user_email]):

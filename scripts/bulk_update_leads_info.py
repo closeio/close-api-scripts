@@ -70,7 +70,6 @@ custom columns (new custom field will be created if not exists):
 
 parser.add_argument('csvfile', type=argparse.FileType('rU'), help='csv file')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--development', '-d', action='store_true', help='Use a development (testing) server rather than production.')
 parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
 parser.add_argument('--create-custom-fields', '-f', action='store_true', help='Create new custom fields, if not exists.')
 parser.add_argument('--disable-create', '-e', action='store_true', help='Prevent new lead creation. Update only exists leads.')
@@ -106,7 +105,7 @@ header_row['Validation Error'] = 'Validation Error'
 
 error_array.append(header_row)
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 org_id = api.get('api_key/' + args.api_key)['organization_id']
 org = api.get('organization/' + org_id)
 org_name = org['name']
