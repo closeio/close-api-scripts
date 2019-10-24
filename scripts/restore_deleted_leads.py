@@ -1,18 +1,27 @@
 import argparse
 
 import gevent.monkey
+
+gevent.monkey.patch_all()
 from closeio_api import Client as CloseIO_API, APIError
 from gevent.pool import Pool
 
-gevent.monkey.patch_all()
-
 parser = argparse.ArgumentParser(description='FOR INTERNAL USE ONLY. Restore an array of deleted leads by ID. This CANNOT restore status changes or call recordings.')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
+group = parser.add_mutually_exclusive_group(required=True)
+group.add_argument('--leads', help='List of lead IDs in a form of a comma separated list')
+group.add_argument('--leads-file', help='List of lead IDs in a form of a textual file with single column of lead IDs')
 args = parser.parse_args()
 api = CloseIO_API(args.api_key)
 
 # Array of Lead IDs. Add the IDs you want to restore here.
-lead_ids = []
+if args.leads:
+    lead_ids = args.leads.split(",")
+elif args.leads_file:
+    with open(args.leads_file) as f:
+        lines = f.readlines()
+    lead_ids = [el.strip() for el in lines]  # Strip new lines
+    lead_ids = list(filter(None, lead_ids))  # Strip empty lines
 
 # Create a list of active users for the sake of posting opps.
 org_id = api.get('me')['organizations'][0]['id']
