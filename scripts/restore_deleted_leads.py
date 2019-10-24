@@ -6,7 +6,7 @@ gevent.monkey.patch_all()
 from closeio_api import Client as CloseIO_API, APIError
 from gevent.pool import Pool
 
-parser = argparse.ArgumentParser(description='FOR INTERNAL USE ONLY. Restore an array of deleted leads by ID. This CANNOT restore status changes or call recordings.')
+parser = argparse.ArgumentParser(description='Restore an array of deleted leads by ID. This CANNOT restore status changes or call recordings.')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('--leads', help='List of lead IDs in a form of a comma separated list')
