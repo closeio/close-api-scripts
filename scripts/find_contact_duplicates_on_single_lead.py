@@ -30,7 +30,7 @@ leads = []
 # Write data to a CSV
 def writeCSV(type_name, items, ordered_keys):
     print(f"Writing {type_name} data to CSV...")
-    f = open(f'{org_name} {type_name} Duplicates on a Single Lead.csv', 'wt')
+    f = open(f'{org_name} {type_name} Duplicates on a Single Lead.csv', 'wt', encoding='utf-8')
     try:
         writer = csv.DictWriter(f, ordered_keys)
         writer.writeheader()

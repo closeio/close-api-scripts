@@ -96,7 +96,7 @@ pool.map(downloadCall, calls)
 # Sort all downloaded calls by date_created to be in order because they were pulled in parallel
 downloaded_calls = sorted(downloaded_calls, key=itemgetter('Date Created'), reverse=True)
 # Write Filename Output to CSV
-f = open('%s/%s Downloaded Call Recordings from %s to %s Reference.csv' % (args.file_path, org_name, args.date_start, args.date_end), 'wt')
+f = open(f'{args.file_path}/{org_name} Downloaded Call Recordings from {args.date_start} to {args.date_end} Reference.csv', 'wt', encoding='utf-8')
 try:
     ordered_keys = ['Call Activity ID', 'Filename', 'Date Created', 'Type', 'Duration', 'Lead ID', 'url']
     writer = csv.DictWriter(f, ordered_keys)

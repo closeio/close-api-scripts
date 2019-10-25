@@ -70,7 +70,7 @@ while has_more:
 
 print(f"Total {custom_field_name} Change Events Found: {len(events)}")
 
-f = open(f'{org_name} {custom_field_name} Custom Field Changes.csv', 'wt')
+f = open(f'{org_name} {custom_field_name} Custom Field Changes.csv', 'wt', encoding='utf-8')
 try:
     ordered_keys = ['Date', 'Lead ID', 'Lead Name', 'User that Made the Change', 'Old Value', 'New Value']
     writer = csv.DictWriter(f, ordered_keys)

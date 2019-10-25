@@ -144,7 +144,7 @@ if args.user_counts:
 if args.org_count:
     getTTR(None)
 
-f = open(f'{org_name} Time to Respond Data Per User For The Past {args.past_days} days.csv', 'wt')
+f = open(f'{org_name} Time to Respond Data Per User For The Past {args.past_days} days.csv', 'wt', encoding='utf-8')
 try:
     keys = user_stats[0].keys()
     ordered_keys = ['User Name', 'Average Time to Respond To Leads (Only Leads Alredy Responded To) Formatted', 'Average Time to Respond To Leads (Including Leads Not Responded To Yet) Formatted'] + [i for i in keys if i not in [

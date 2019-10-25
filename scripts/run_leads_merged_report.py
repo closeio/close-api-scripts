@@ -69,7 +69,7 @@ pool = Pool(7)
 pool.map(getSourceLeadData, events)
 
 # Write data to a CSV
-f = open(f'{org_name} Merge Lead Events in Last 30 Days.csv', 'wt')
+f = open(f'{org_name} Merge Lead Events in Last 30 Days.csv', 'wt', encoding='utf-8')
 try:
     ordered_keys = ['Merge Event ID', 'Close API Request ID', 'Date', 'User', 'Destination Lead Name', 'Destination Lead Status', 'Destination Lead ID', 'Source Lead Name', 'Source Lead Status', 'Source Lead ID', 'Current Lead URL']
     writer = csv.DictWriter(f, ordered_keys)

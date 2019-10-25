@@ -319,7 +319,7 @@ for r in c:
 logging.info('summary: updated[%d], new[%d], skipped[%d]' % (updated_leads, new_leads, skipped_leads))
 
 if len(error_array) > 1:
-    f = open('%s Bulk Update Errored Rows.csv' % (org_name), 'wt')
+    f = open(f'{org_name} Bulk Update Errored Rows.csv', 'wt', encoding='utf-8')
     try:
         keys = error_array[0].keys()
         ordered_keys = ['Validation Error'] + c.fieldnames

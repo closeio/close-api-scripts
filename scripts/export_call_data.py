@@ -86,7 +86,7 @@ if args.phone_number:
 if args.unattached_only:
     calls = [i for i in calls if i['lead_id'] == None]
 
-f = open(f'{org_name} Calls.csv', 'wt')
+f = open(f'{org_name} Calls.csv', 'wt', encoding='utf-8')
 try:
     keys = ['date_created', 'updated_by_name'] + [i for i in params['_fields'].split(',') if i not in ['date_created', 'updated_by_name', 'lead_id', 'cost', 'formatted_cost']] + ['lead_id', 'lead_name']
     if args.call_costs:
