@@ -14,7 +14,7 @@ group_to = parser.add_mutually_exclusive_group(required=True)
 group_to.add_argument('--to-user-id', '-t', type=str, help='')
 group_to.add_argument('--to-user-email', type=str, help='')
 
-parser.add_argument('--api-key', '-k', required=True, help='')
+parser.add_argument('--api-key', '-k', required=True, help='API key')
 parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
 parser.add_argument('--continue-on-error', '-s', action='store_true', help='Do not abort after first error')
 group = parser.add_argument_group()
@@ -74,7 +74,7 @@ else:
     to_user_id = resp['id']
     emails_to_ids[resp['email']] = resp['id']
 
-ids_to_emails = dict((v, k) for k, v in emails_to_ids.iteritems())
+ids_to_emails = dict((v, k) for k, v in emails_to_ids.items())
 
 logging.info(f'from user_id {from_user_id} ({ids_to_emails[from_user_id]})')
 logging.info(f'to user_id: {to_user_id} ({ids_to_emails[to_user_id]})')
