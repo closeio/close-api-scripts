@@ -1,8 +1,8 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
-import sys
 import argparse
 import logging
+
 from closeio_api import Client as CloseIO_API
 
 LEADS_QUERY = '* sort:created'
@@ -68,28 +68,18 @@ ISO_COUNTRIES = {'AF': 'Afghanistan', 'AX': 'Aland Islands', 'AL': 'Albania', 'D
 
 parser = argparse.ArgumentParser(description='changing old country code to new country code')
 
-parser.add_argument('--list-countries', '-l', action='store_true',
-                    help='List of valid countries')
-
+parser.add_argument('--list-countries', '-l', action='store_true', help='List of valid countries')
 parser.add_argument('old_code', type=str, help='Old country code')
 parser.add_argument('new_code', type=str, help='New country code')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--development', '-d', action='store_true',
-                    help='Use a development (testing) server rather than production.')
-parser.add_argument('--confirmed', '-c', action='store_true',
-                    help='Without this flag, the script will do a dry run without actually updating any data.')
+parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
 args = parser.parse_args()
 
 log_format = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
 if not args.confirmed:
-    log_format = 'DRY RUN: '+log_format
+    log_format = 'DRY RUN: ' + log_format
 logging.basicConfig(level=logging.INFO, format=log_format)
 logging.debug('parameters: %s' % vars(args))
-
-#if args.list_countries:
-#    for k,v in ISO_COUNTRIES.iteritems():
-#        print k, v
-#    sys.exit(0)
 
 args.old_code = args.old_code.upper()
 args.new_code = args.new_code.upper()
@@ -100,7 +90,7 @@ assert args.old_code != args.new_code, 'equal country codes'
 logging.info('old country: %s (%s) -> new country: %s (%s) ' % (args.old_code, ISO_COUNTRIES[args.old_code],
                                                                 args.new_code, ISO_COUNTRIES[args.new_code]))
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 has_more = True
 offset = 0
 
@@ -121,7 +111,7 @@ while has_more:
                 need_update = True
         if need_update:
             if args.confirmed:
-                api.put('lead/'+lead['id'], data={'addresses': lead['addresses']})
+                api.put('lead/' + lead['id'], data={'addresses': lead['addresses']})
             logging.info('updated %s' % lead['id'])
 
     offset += len(leads)

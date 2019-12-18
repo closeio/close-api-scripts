@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
-import re
 import argparse
-import datetime
 import csv
 import logging
-from closeio_api import Client as CloseIO_API, APIError
+import re
+import sys
+
+from closeio_api import Client as CloseIO_API
 from dateutil.parser import parse as parse_date
 
 OPPORTUNITY_FIELDS = ['opportunity%s_note',
@@ -25,6 +25,7 @@ def get_contact_info(contact_no, csv_row, what, contact_type):
     for col in columns:
         contact_info.append({what: csv_row[col], 'type': contact_type})
     return contact_info
+
 
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description="""
 Imports leads and related data from a csv file with header.
@@ -69,28 +70,22 @@ custom columns (new custom field will be created if not exists):
 
 parser.add_argument('csvfile', type=argparse.FileType('rU'), help='csv file')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--development', '-d', action='store_true',
-                    help='Use a development (testing) server rather than production.')
-parser.add_argument('--confirmed', '-c', action='store_true',
-                    help='Without this flag, the script will do a dry run without actually updating any data.')
-parser.add_argument('--create-custom-fields', '-f', action='store_true',
-                    help='Create new custom fields, if not exists.')
-parser.add_argument('--disable-create', '-e', action='store_true',
-                    help='Prevent new lead creation. Update only exists leads.')
-parser.add_argument('--continue-on-error', '-s', action='store_true',
-                    help='Do not abort import after first error')
+parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
+parser.add_argument('--create-custom-fields', '-f', action='store_true', help='Create new custom fields, if not exists.')
+parser.add_argument('--disable-create', '-e', action='store_true', help='Prevent new lead creation. Update only exists leads.')
+parser.add_argument('--continue-on-error', '-s', action='store_true', help='Do not abort import after first error')
 args = parser.parse_args()
 
 log_format = "[%(asctime)s] %(levelname)s %(message)s"
 if not args.confirmed:
-    log_format = 'DRY RUN: '+log_format
+    log_format = 'DRY RUN: ' + log_format
 logging.basicConfig(level=logging.INFO, format=log_format)
 logging.debug('parameters: %s' % vars(args))
 
 sniffer = csv.Sniffer()
 dialect = sniffer.sniff(args.csvfile.read(1000000))
 args.csvfile.seek(0)
-error_array=[]
+error_array = []
 c = csv.DictReader(args.csvfile, dialect=dialect)
 
 unique_field = None
@@ -110,7 +105,7 @@ header_row['Validation Error'] = 'Validation Error'
 
 error_array.append(header_row)
 
-api = CloseIO_API(args.api_key, development=args.development)
+api = CloseIO_API(args.api_key)
 org_id = api.get('api_key/' + args.api_key)['organization_id']
 org = api.get('organization/' + org_id)
 org_name = org['name']
@@ -192,7 +187,7 @@ for r in c:
         payload['addresses'] = addresses
 
     custom_keys = [key for key in r if key.startswith('custom.')
-              and key.split('.', 1)[1] in available_custom_fieldnames and r[key]]
+                   and key.split('.', 1)[1] in available_custom_fieldnames and r[key]]
     custom_patches = {}
     for key in custom_keys:
         if key.replace('custom.', "") in multi_select_fields:
@@ -205,7 +200,7 @@ for r in c:
         payload.update(custom_patches)
 
     if r.get(unique_field):
-        payload.update({ unique_field.replace("unique.custom.", "custom."): r[unique_field] })
+        payload.update({unique_field.replace("unique.custom.", "custom."): r[unique_field]})
 
     try:
         lead = None
@@ -269,14 +264,14 @@ for r in c:
                                                      lead['display_name']))
             else:
                 logging.info('line %d new lead for: %s' % (c.line_num,
-                                                     r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
+                                                           r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
             new_leads += 1
 
         elif lead is None and args.disable_create:
             r['Validation Error'] = 'Lead does not exist in Close'
             skipped_leads += 1
             logging.info('line %d skipped: %s does not exist in Close.io' % (c.line_num,
-                                                 r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
+                                                                             r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
             error_array.append(r)
             continue
 
@@ -286,7 +281,7 @@ for r in c:
                 resp = api.post('activity/note', data={'note': note, 'lead_id': lead['id']})
             logging.debug('%s new note: %s' % (lead['id'] if args.confirmed else 'X', note.decode('utf-8')))
 
-        opportunity_ids = { x[len('opportunity')] for x in c.fieldnames if re.match(r'opportunity[0-9]', x) }
+        opportunity_ids = {x[len('opportunity')] for x in c.fieldnames if re.match(r'opportunity[0-9]', x)}
         for i in opportunity_ids:
             opp_payload = None
             if any([r.get(x % i) for x in OPPORTUNITY_FIELDS]):
@@ -298,14 +293,14 @@ for r in c:
                 opp_payload = {
                     'lead_id': lead['id'],
                     'note': r.get('opportunity%s_note' % i),
-                    #'value': int(float(re.sub(r'[^\d.]', '', r['opportunity%s_value' % i])) * 100),  # converts $1,000.42 into 100042
+                    # 'value': int(float(re.sub(r'[^\d.]', '', r['opportunity%s_value' % i])) * 100),  # converts $1,000.42 into 100042
                     'value': int(r['opportunity%s_value' % i]) if r.get('opportunity%s_value' % i) else None,  # assumes cents are given
                     'value_period': r.get('opportunity%s_value_period' % i),
                     'confidence': int(r['opportunity%s_confidence' % i]) if r.get('opportunity%s' % i) else None,
                     'status': r.get('opportunity%s_status' % i),
                     'date_won': str(parse_date(r['opportunity%s_date_won' % i])) if r.get('opportunity%s_date_won' % i) else None
                     # 'date_won': str(parse_date(r['opportunity%s_date_won' % i])) if 'opportunity%s_date_won' % i in r else None
-                    #'date_won': str(datetime.datetime.strptime(r['opportunity%s_date_won' % i], '%d/%m/%y')),
+                    # 'date_won': str(datetime.datetime.strptime(r['opportunity%s_date_won' % i], '%d/%m/%y')),
                 }
                 if args.confirmed:
                     api.post('opportunity', data=opp_payload)
@@ -324,11 +319,11 @@ for r in c:
 logging.info('summary: updated[%d], new[%d], skipped[%d]' % (updated_leads, new_leads, skipped_leads))
 
 if len(error_array) > 1:
-    f = open('%s Bulk Update Errored Rows.csv' % (org_name), 'wt')
+    f = open(f'{org_name} Bulk Update Errored Rows.csv', 'wt', encoding='utf-8')
     try:
         keys = error_array[0].keys()
         ordered_keys = ['Validation Error'] + c.fieldnames
         writer = csv.DictWriter(f, ordered_keys)
         writer.writerows(error_array)
     finally:
-        f.close()   
+        f.close()
