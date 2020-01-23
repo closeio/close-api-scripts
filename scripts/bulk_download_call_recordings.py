@@ -19,7 +19,6 @@ parser.add_argument('--file-path', '-f', required=True, help='The file path to t
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
-api_encoded = "Basic " + str(base64.b64encode(args.api_key.encode("utf-8")))
 org_id = api.get(f'api_key/{args.api_key}', params={'_fields': 'organization_id'})['organization_id']
 org_name = api.get('organization/' + org_id, params={'_fields': 'name'})['name'].replace('/', '')
 days = []
@@ -74,7 +73,8 @@ calls = sorted(calls, key=itemgetter('date_created'), reverse=True)
 def downloadCall(call):
     try:
         call_title = "close-recording-%s.mp3" % call['id']
-        doc = requests.get(call['url'], headers={'Content-Type': 'application/json', 'Authorization': api_encoded})
+        url = call['url']
+        doc = requests.get(url, headers={'Content-Type': 'application/json'}, auth=(args.api_key, ''))
         with open("%s/%s" % (args.file_path, call_title), 'wb') as f:
             f.write(doc.content)
         downloaded_calls.append({
@@ -84,7 +84,7 @@ def downloadCall(call):
             'Duration': call['Answered or Voicemail Duration'],
             'Lead ID': call['lead_id'],
             'Filename': call_title,
-            'url': call['url']
+            'url': url
         })
         print(f"{(calls.index(call) + 1)} of {len(calls)}: Downloading {call_title}")
     except Exception as e:
