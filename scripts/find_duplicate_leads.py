@@ -1,9 +1,11 @@
 import argparse
 import csv
+import json
 import math
 from operator import itemgetter
 
 import gevent.monkey
+
 gevent.monkey.patch_all()
 from urllib.parse import urlparse
 from closeio_api import Client as CloseIO_API
@@ -13,7 +15,7 @@ pool = Pool(7)
 
 parser = argparse.ArgumentParser(description='Find duplicate leads in your Close org via lead name, email address, phone number, or lead url hostname')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--field', '-f', default='all', choices=['lead_name', 'email', 'phone', 'url', 'all'], required=False, help="Specify a field to compare uniqueness")
+parser.add_argument('--field', '-f', default='all', choices=['lead_name', 'email', 'phone', 'contact_name', 'url', 'all'], required=False, help="Specify a field to compare uniqueness")
 args = parser.parse_args()
 
 # Initialize Close API Wrapper
@@ -69,6 +71,14 @@ def getDuplicatesForEmail(email):
     print(f"{(keys_with_dupes_email.index(email) + 1)} of {len(keys_with_dupes_email)}: {email}")
 
 
+# Add to a list of duplicates for contact emails
+def getDuplicatesForContactName(contact_name):
+    for dupe in contact_names[contact_name]:
+        contact_name_duplicates.append(
+            {'Contact Name': contact_name, 'Lead Name': dupe['display_name'], 'Status Label': dupe['status_label'], 'Lead ID': dupe['id'], 'Lead Date Created': dupe['date_created'], 'Close URL': 'https://app.close.com/lead/%s/' % dupe['id']})
+    print(f"{(keys_with_dupes_contact_name.index(contact_name) + 1)} of {len(keys_with_dupes_contact_name)}: {contact_name}")
+
+
 # Add to a list of duplicates for contact phones
 def getDuplicatesForPhone(phone):
     for dupe in phones[phone]:
@@ -91,13 +101,16 @@ leads = sorted(leads, key=itemgetter('date_created'))
 
 # Process duplicates
 lead_names = {}
+contact_names = {}
 emails = {}
 phones = {}
 urls = {}
 keys_with_dupes_lead_name = []
+keys_with_dupes_contact_name = []
 keys_with_dupes_email = []
 keys_with_dupes_phone = []
 keys_with_dupes_url = []
+
 for lead in leads:
     if args.field in ['all', 'lead_name']:
         # Pouplate a dictionary of duplicate lead names, and keep track of those that appear more than once
@@ -118,8 +131,16 @@ for lead in leads:
             elif not urls.get(host_name):
                 urls[host_name] = [lead]
 
-    if args.field in ['all', 'email', 'phone']:
+    if args.field in ['all', 'email', 'phone', 'contact_name']:
         for contact in lead['contacts']:
+            if args.field in ['all', 'contact_name']:
+                contact_name = contact['name'].strip().lower()
+                if contact_names.get(contact_name) and lead not in contact_names[contact_name]:
+                    contact_names[contact_name].append(lead)
+                    keys_with_dupes_contact_name.append(contact_name)
+                elif not contact_names.get(contact_name):
+                    contact_names[contact_name] = [lead]
+
             # Populate a dictionary of emails, and keep track of those that appear more than once
             if args.field in ['all', 'email']:
                 for email in contact['emails']:
@@ -157,6 +178,16 @@ if args.field in ['all', 'email']:
     # Sort the duplicates alphabetically and write them to a CSV
     email_duplicates = sorted(email_duplicates, key=itemgetter('Email Address'))
     writeCSV("Email", email_duplicates, ['Email Address', 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
+
+if args.field in ['all', 'contact_name']:
+    contact_name_duplicates = []
+    print("Getting contact duplicate data...")
+    keys_with_dupes_contact_name = list(set(keys_with_dupes_contact_name))
+    pool.map(getDuplicatesForContactName, keys_with_dupes_contact_name)
+
+    # Sort the duplicates alphabetically and write them to a CSV
+    contact_name_duplicates = sorted(contact_name_duplicates, key=itemgetter('Contact Name'))
+    writeCSV("Contact Name", contact_name_duplicates, ['Contact Name', 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
 
 if args.field in ['all', 'phone']:
     phone_duplicates = []
