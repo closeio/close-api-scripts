@@ -13,9 +13,9 @@ parser.add_argument('--api-key', '-k', required=True, help='API Key')
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
+org_name = api.get('me')['organizations'][0]['name']
 
-org_id = api.get('api_key/' + args.api_key)['organization_id']
-org_name = api.get('organization/' + org_id, params={'_fields': 'name'})['name'].replace('/', "")
+print('Getting email sequences...')
 
 params = {'_fields': 'id'}
 has_more = True
@@ -29,8 +29,10 @@ while has_more:
     offset += len(resp['data'])
     has_more = resp['has_more']
 
+print(f'Found {len(sequence_ids)} email sequences. Getting their details...')
 
 def fetch_sequence(sequence_id):
+    print(f'Getting details for {sequence_id}')
     resp_sequence = api.get(f'sequence/{sequence_id}', params=params)
     active_subscriptions = resp_sequence['subscription_counts_by_status']['active']
     paused_subscriptions = resp_sequence['subscription_counts_by_status']['paused']
@@ -49,10 +51,14 @@ def fetch_sequence(sequence_id):
 
 
 sequences = []
+
 pool = Pool(5)
 pool.map(fetch_sequence, sequence_ids)
 
-f = open(f'{org_name} Email Sequences.csv', 'wt', encoding='utf-8')
+file_name = f'{org_name} Email Sequences.csv'
+print(f'Exporting to `{file_name}`')
+
+f = open(file_name, 'wt', encoding='utf-8')
 try:
     keys = ['id', 'name', 'is_active', 'total_subscriptions', 'active_subscriptions', 'paused_subscriptions', 'finished_subscriptions']
     writer = csv.DictWriter(f, keys)
