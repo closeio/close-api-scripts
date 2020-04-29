@@ -15,7 +15,7 @@ pool = Pool(7)
 
 parser = argparse.ArgumentParser(description='Find duplicate leads in your Close org via lead name, email address, phone number, or lead url hostname')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--field', '-f', default='all', choices=['lead_name', 'email', 'phone', 'contact_name', 'url', 'all'], required=False, help="Specify a field to compare uniqueness")
+parser.add_argument('--field', '-f', default='all', required=False, help="Specify a field to compare uniqueness - lead_name, custom.NAME, contact_name, email, phone, url, all")
 args = parser.parse_args()
 
 # Initialize Close API Wrapper
@@ -49,7 +49,7 @@ def getLeadsSlice(slice_num):
     has_more = True
     offset = 0
     while has_more:
-        resp = api.get('lead', params={'_skip': offset, 'query': 'sort:created slice:%s/%s' % (slice_num, total_slices), '_fields': 'id,display_name,contacts,status_label,date_created,url'})
+        resp = api.get('lead', params={'_skip': offset, 'query': 'sort:created slice:%s/%s' % (slice_num, total_slices), '_fields': 'id,display_name,contacts,status_label,date_created,url,custom'})
         for lead in resp['data']:
             leads.append(lead)
         offset += len(resp['data'])
@@ -61,6 +61,15 @@ def getDuplicatesForLeadName(lead_name):
     for dupe in lead_names[lead_name]:
         lead_name_duplicates.append({'Lead Name': dupe['display_name'], 'Status Label': dupe['status_label'], 'Lead ID': dupe['id'], 'Lead Date Created': dupe['date_created'], 'Close URL': 'https://app.close.com/lead/%s/' % dupe['id']})
     print(f"{(keys_with_dupes_lead_name.index(lead_name) + 1)} of {len(keys_with_dupes_lead_name)}: {lead_name}")
+
+
+def getDuplicatesForCustomField(custom_field_value):
+    custom_field_name = args.field.split('.')[1]
+
+    for dupe in custom_fields[custom_field_value]:
+        custom_field_duplicates.append({custom_field_name: custom_field_value, 'Lead Name': dupe['display_name'], 'Status Label': dupe['status_label'], 'Lead ID': dupe['id'], 'Lead Date Created': dupe['date_created'],
+                                        'Close URL': 'https://app.close.com/lead/%s/' % dupe['id']})
+    print(f"{(keys_with_dupes_custom_field.index(custom_field_value) + 1)} of {len(keys_with_dupes_custom_field)}: {custom_field_value}")
 
 
 # Add to a list of duplicates for contact emails
@@ -101,11 +110,13 @@ leads = sorted(leads, key=itemgetter('date_created'))
 
 # Process duplicates
 lead_names = {}
+custom_fields = {}
 contact_names = {}
 emails = {}
 phones = {}
 urls = {}
 keys_with_dupes_lead_name = []
+keys_with_dupes_custom_field = []
 keys_with_dupes_contact_name = []
 keys_with_dupes_email = []
 keys_with_dupes_phone = []
@@ -120,6 +131,16 @@ for lead in leads:
             keys_with_dupes_lead_name.append(lower_name)
         elif not lead_names.get(lower_name):
             lead_names[lower_name] = [lead]
+
+    if args.field.startswith('custom.'):
+        custom_field_name = args.field.split('.')[1]
+        custom_field_value = lead['custom'].get(custom_field_name)
+        if custom_field_value:
+            if custom_fields.get(custom_field_value) and lead not in custom_fields[custom_field_value]:
+                custom_fields[custom_field_value].append(lead)
+                keys_with_dupes_custom_field.append(custom_field_value)
+            elif not custom_fields.get(custom_field_value):
+                custom_fields[custom_field_value] = [lead]
 
     if args.field in ['all', 'url']:
         # Pouplate a dictionary of duplicate lead urls, and keep track of those that appear more than once
@@ -168,6 +189,18 @@ if args.field in ['all', 'lead_name']:
     # Sort the duplicates alphabetically and write them to a CSV
     lead_name_duplicates = sorted(lead_name_duplicates, key=itemgetter('Lead Name'))
     writeCSV("Lead Name", lead_name_duplicates, ['Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
+
+if args.field.startswith('custom.'):
+    custom_field_name = args.field.split('.')[1]
+
+    custom_field_duplicates = []
+    print("Getting lead name duplicate data...")
+    keys_with_dupes_lead_name = list(set(keys_with_dupes_custom_field))
+    pool.map(getDuplicatesForCustomField, keys_with_dupes_custom_field)
+
+    # Sort the duplicates alphabetically and write them to a CSV
+    custom_field_duplicates = sorted(custom_field_duplicates, key=itemgetter(custom_field_name))
+    writeCSV(f'Custom - {custom_field_name}', custom_field_duplicates, [custom_field_name, 'Lead Name', 'Status Label', 'Lead Date Created', 'Lead ID', 'Close URL'])
 
 if args.field in ['all', 'email']:
     email_duplicates = []
