@@ -284,7 +284,7 @@ for r in c:
         opportunity_ids = {x[len('opportunity')] for x in c.fieldnames if re.match(r'opportunity[0-9]', x)}
         for i in opportunity_ids:
             opp_payload = None
-            if any([r.get(x % i) for x in OPPORTUNITY_FIELDS]):
+            if all([r.get(x % i) for x in OPPORTUNITY_FIELDS]):
                 if r['opportunity%s_value_period' % i] not in ('one_time', 'monthly'):
                     logging.error('line %d invalid value_period "%s" for lead %d' %
                                   (c.line_num, r['opportunity%s_value_period' % i], i))
