@@ -10,6 +10,7 @@ import sys
 from closeio_api import Client as CloseIO_API
 from dateutil.parser import parse as parse_date
 
+CUSTOM_FIELD_MULTIPLE_SELECT_VALUE_SEPARATOR = ';'
 OPPORTUNITY_FIELDS = ['opportunity%s_note',
                       'opportunity%s_value',
                       'opportunity%s_value_period',
@@ -30,6 +31,8 @@ def get_contact_info(contact_no, csv_row, what, contact_type):
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description="""
 Imports leads and related data from a csv file with header.
 Header's columns may be declared in any order. Detects csv dialect (delimeter and quotechar).
+
+Any indexed attribute such as notes, addresses, opportunities, or contacts does NOT need to start from 0.
 """, epilog="""
 key columns:
     * lead_id                           - If exists and not empty, update using lead_id.
@@ -66,8 +69,8 @@ contact columns (new contacts wil be added):
     * contact[0-9]_phone[0-9]           - contact phones
     * contact[0-9]_email[0-9]           - contact emails
     * contact[0-9]_url[0-9]             - contact urls
-custom columns (new custom field will be created if not exists):
-    * custom.[custom_field_name]        - value of custom_field_name
+custom columns (new custom field with type `text` will be created if not exists):
+    * custom.[custom_field_name]        - value of custom_field_name; if multiple choice separate values with ;
 """)
 
 parser.add_argument('csvfile', type=argparse.FileType('rU'), help='csv file')
@@ -78,44 +81,33 @@ parser.add_argument('--disable-create', '-e', action='store_true', help='Prevent
 parser.add_argument('--continue-on-error', '-s', action='store_true', help='Do not abort import after first error')
 args = parser.parse_args()
 
+# Set up logging configuration
 log_format = "[%(asctime)s] %(levelname)s %(message)s"
 if not args.confirmed:
     log_format = 'DRY RUN: ' + log_format
 logging.basicConfig(level=logging.INFO, format=log_format)
 logging.debug(f'parameters: {vars(args)}')
 
+# Sniff the dialect and get the CSV reader
 sniffer = csv.Sniffer()
 dialect = sniffer.sniff(args.csvfile.read(1000000))
 args.csvfile.seek(0)
 error_array = []
-c = csv.DictReader(args.csvfile, dialect=dialect)
+csv_reader = csv.DictReader(args.csvfile, dialect=dialect)
 
-unique_field = None
+assert any(x in ('company', 'lead_id', 'email_address') or x.startswith('unique.custom.') for x in csv_reader.fieldnames), \
+    'ERROR: column "company" or "lead_id" or "email_address" or a field starting with "unique.custom." is not found'
 
-assert any(x in ('company', 'lead_id', 'email_address') or x.startswith('unique.custom.') for x in c.fieldnames), \
-    'ERROR: column "company" or "lead_id" or "email_address" or a field starting with unique.custom. is not found'
-
-if 'lead_id' not in c.fieldnames:
-    unique_fields = [i for i in c.fieldnames if i.startswith('unique.custom.')]
-    if len(unique_fields) > 0:
-        unique_field = unique_fields[0]
-
-header_row = {}
-for col in c.fieldnames:
-    header_row[col] = col
-header_row['Validation Error'] = 'Validation Error'
-
-error_array.append(header_row)
+unique_field_name = next(iter([i for i in csv_reader.fieldnames if i.startswith('unique.custom.')]), None)
 
 api = CloseIO_API(args.api_key)
-org_id = api.get('api_key/' + args.api_key)['organization_id']
+org_id = api.get('me')['organizations'][0]['id']
 org = api.get('organization/' + org_id)
 org_name = org['name']
 
 resp = org['lead_custom_fields']
 available_custom_fieldnames = [x['name'] for x in resp]
-new_custom_fieldnames = [x for x in [y.split('.', 1)[1] for y in c.fieldnames if y.startswith('custom.')]
-                         if x not in available_custom_fieldnames]
+new_custom_fieldnames = [x for x in [y.split('.', 1)[1] for y in csv_reader.fieldnames if y.startswith('custom.')] if x not in available_custom_fieldnames]
 multi_select_fields = [x['name'] for x in resp if x['accepts_multiple_values']]
 
 if new_custom_fieldnames:
@@ -135,40 +127,40 @@ updated_leads = 0
 new_leads = 0
 skipped_leads = 0
 
-for r in c:
-    payload = {}
-
+for row in csv_reader:
     # Skip all-empty rows
-    if not any(r.values()):
+    if not any(row.values()):
         continue
 
-    if r.get('company'):
-        payload['name'] = r['company']
+    payload = {}
+    if row.get('company'):
+        payload['name'] = row['company']
 
-    if r.get('url'):
-        payload['url'] = r['url']
+    if row.get('url'):
+        payload['url'] = row['url']
 
-    if r.get('description'):
-        payload['description'] = r['description']
+    if row.get('description'):
+        payload['description'] = row['description']
 
-    if r.get('status'):
-        payload['status'] = r['status']
+    if row.get('status'):
+        payload['status'] = row['status']
 
-    contact_indexes = [y[len('contact')] for y in r.keys() if re.match(r'contact[0-9]_name', y)]  # extract the ordinal number for all the contacts in this row (y[7] bcos len('contact') == 7)
+    # Contacts
+    contact_indexes = [y[len('contact')] for y in row.keys() if re.match(r'contact[0-9]_name', y)]  # Extract the contact indexes if we have contact1_name, but missing contact0_name
     contacts = []
     for idx in contact_indexes:
         contact = {}
-        if r.get(f'contact{idx}_name'):
-            contact['name'] = r[f'contact{idx}_name']
-        if r.get(f'contact{idx}_title'):
-            contact['title'] = r[f'contact{idx}_title']
-        phones = get_contact_info(idx, r, 'phone', 'office')
+        if row.get(f'contact{idx}_name'):
+            contact['name'] = row[f'contact{idx}_name']
+        if row.get(f'contact{idx}_title'):
+            contact['title'] = row[f'contact{idx}_title']
+        phones = get_contact_info(idx, row, 'phone', 'office')
         if phones:
             contact['phones'] = phones
-        emails = get_contact_info(idx, r, 'email', 'office')
+        emails = get_contact_info(idx, row, 'email', 'office')
         if emails:
             contact['emails'] = emails
-        urls = get_contact_info(idx, r, 'url', 'url')
+        urls = get_contact_info(idx, row, 'url', 'url')
         if urls:
             contact['urls'] = urls
         if contact:
@@ -176,67 +168,64 @@ for r in c:
     if contacts:
         payload['contacts'] = contacts
 
-    addresses_indexes = set([y[len('address')] for y in r.keys() if re.match(r'address[0-9]_*', y)])  # extract the ordinal number for all the addresses in this row (y[7] bcos len('address') == 7)
+    # Addresses
+    addresses_indexes = set([y[len('address')] for y in row.keys() if re.match(r'address[0-9]_*', y)])  # Extract the address indexes if we have address1_city, but missing address0_city
     addresses = []
     for idx in addresses_indexes:
         address = {}
         for z in ['country', 'city', 'zipcode', 'label', 'state', 'address_1', 'address_2']:
-            if r.get(f'address{idx}_{z}'):
-                address[z] = r[f'address{idx}_{z}']
+            if row.get(f'address{idx}_{z}'):
+                address[z] = row[f'address{idx}_{z}']
         if address:
             addresses.append(address)
     if addresses:
         payload['addresses'] = addresses
 
-    custom_keys = [key for key in r if key.startswith('custom.')
-                   and key.split('.', 1)[1] in available_custom_fieldnames and r[key]]
+    # Custom fields - add them only if they are available in Close org and exist
+    custom_keys = [key for key in row if key.startswith('custom.') and key.split('.', 1)[1] in available_custom_fieldnames and row[key]]
     custom_patches = {}
     for key in custom_keys:
-        if key.replace('custom.', "") in multi_select_fields:
-            custom_patches[key] = [i.strip() for i in r[key].split(';')]
-
+        if key.replace('custom.', '') in multi_select_fields:
+            custom_patches[key] = [i.strip() for i in row[key].split(CUSTOM_FIELD_MULTIPLE_SELECT_VALUE_SEPARATOR)]
         else:
-            custom_patches[key] = r[key]
+            custom_patches[key] = row[key]
 
-    if custom_patches and custom_patches != {}:
+    if custom_patches:
         payload.update(custom_patches)
 
-    if r.get(unique_field):
-        payload.update({unique_field.replace("unique.custom.", "custom."): r[unique_field]})
+    if row.get(unique_field_name):
+        payload.update({unique_field_name.replace("unique.custom.", "custom."): row[unique_field_name]})
 
     try:
         lead = None
-        if r.get('lead_id') is not None:
+        if row.get('lead_id') is not None:
             # exists lead
-            resp = api.get(f'lead/{r["lead_id"]}')
+            resp = api.get(f'lead/{row["lead_id"]}')
             logging.debug(f'received: {resp}')
             lead = resp
-
-        elif r.get(unique_field) is not None:
-            field = unique_field.replace("unique.custom.", "custom.")
+        elif row.get(unique_field_name) is not None:
+            field = unique_field_name.replace("unique.custom.", "custom.")
             resp = api.get('lead', params={
-                'query': f'"{field}":"{r[unique_field]}" sort:created',
+                'query': f'"{field}":"{row[unique_field_name]}" sort:created',
                 '_fields': 'id,display_name,name,contacts,custom',
                 'limit': 1
             })
             logging.debug(f'received: {resp}')
             if resp['total_results']:
                 lead = resp['data'][0]
-
-        elif r.get('email_address') is not None:
+        elif row.get('email_address') is not None:
             resp = api.get('lead', params={
-                'query': f'email_address:"{r["email_address"]}" sort:created',
+                'query': f'email_address:"{row["email_address"]}" sort:created',
                 '_fields': 'id,display_name,name,contacts,custom',
                 'limit': 1
             })
             logging.debug(f'received: {resp}')
             if resp['total_results']:
                 lead = resp['data'][0]
-
         else:
             # first lead in the company
             resp = api.get('lead', params={
-                'query': f'company:"{r["company"]}" sort:created',
+                'query': f'company:"{row["company"]}" sort:created',
                 '_fields': 'id,display_name,name,contacts,custom',
                 'limit': 1
             })
@@ -251,71 +240,72 @@ for r in c:
                     for key in multi_select_fields:
                         if payload.get('custom.' + key) and lead['custom'].get(key):
                             payload['custom.' + key] = lead['custom'][key] + payload['custom.' + key]
-                api.put('lead/' + lead['id'], data=payload)
-            logging.info(f'line {c.line_num} updated: {lead["id"]} {lead.get("name") if lead.get("name") else ""}')
+                api.put(f'lead/{lead["id"]}', data=payload)
+            logging.info(f'line {csv_reader.line_num} updated: {lead["id"]} {lead.get("name") if lead.get("name") else ""}')
             updated_leads += 1
+
         # new lead
         elif lead is None and not args.disable_create:
             logging.debug(f'to sent: {payload}')
             if args.confirmed:
                 lead = api.post('lead', data=payload)
-                logging.info(f'line {c.line_num} new: {lead["id"] if args.confirmed else "X"} {lead["display_name"]}')
+                logging.info(f'line {csv_reader.line_num} new: {lead["id"] if args.confirmed else "X"} {lead["display_name"]}')
             else:
-                logging.info(f'line {c.line_num} new lead for: {r["company"] if r.get("company") else r.get("email_address") or r.get(unique_field)}')
+                logging.info(f'line {csv_reader.line_num} new lead for: {row["company"] if row.get("company") else row.get("email_address") or row.get(unique_field_name)}')
             new_leads += 1
         elif lead is None and args.disable_create:
-            r['Validation Error'] = 'Lead does not exist in Close'
+            row['Validation Error'] = 'Lead does not exist in Close'
             skipped_leads += 1
-            logging.info(f'line {c.line_num} skipped: {r["company"] if r.get("company") else r.get("email_address") or r.get(unique_field)} does not exist in Close.io')
-            error_array.append(r)
+            logging.info(f'line {csv_reader.line_num} skipped: {row["company"] if row.get("company") else row.get("email_address") or row.get(unique_field_name)} does not exist in Close.io')
+            error_array.append(row)
             continue
 
-        notes = [r[x] for x in r.keys() if re.match(r'note[0-9]', x) and r[x]]
+        notes = [row[x] for x in row.keys() if re.match(r'note[0-9]', x) and row[x]]
         for note in notes:
             if args.confirmed:
                 resp = api.post('activity/note', data={'note': note, 'lead_id': lead['id']})
-            logging.debug(f'{lead["id"] if args.confirmed else "X"} new note: {note.decode("utf-8")}')
+            logging.debug(f'{lead["id"] if args.confirmed else "X"} new note: {note}')
 
-        opportunity_ids = {x[len('opportunity')] for x in c.fieldnames if re.match(r'opportunity[0-9]', x)}
+        opportunity_ids = {x[len('opportunity')] for x in csv_reader.fieldnames if re.match(r'opportunity[0-9]', x)}
         for i in opportunity_ids:
             opp_payload = None
-            if all([r.get(x % i) for x in OPPORTUNITY_FIELDS]):
-                if r[f'opportunity{i}_value_period'] not in ('one_time', 'monthly', 'annual'):
-                    value_period = r[f"opportunity{i}_value_period"]
-                    logging.error(f'line {c.line_num} invalid value_period "{value_period}" for opportunity {i}')
+            if all([row.get(x % i) for x in OPPORTUNITY_FIELDS]):
+                if row[f'opportunity{i}_value_period'] not in ('one_time', 'monthly', 'annual'):
+                    value_period = row[f"opportunity{i}_value_period"]
+                    logging.error(f'line {csv_reader.line_num} invalid value_period "{value_period}" for opportunity {i}')
                     continue
 
                 opp_payload = {
                     'lead_id': lead['id'],
-                    'note': r.get(f'opportunity{i}_note'),
-                    'value': int(r[f'opportunity{i}_value']),  # assumes cents are given
-                    'value_period': r.get(f'opportunity{i}_value_period'),
-                    'confidence': int(r[f'opportunity{i}_confidence']),
-                    'status': r.get(f'opportunity{i}_status'),
-                    'date_won': str(parse_date(r[f'opportunity{i}_date_won']))
+                    'note': row.get(f'opportunity{i}_note'),
+                    'value': int(row[f'opportunity{i}_value']),  # assumes cents are given
+                    'value_period': row.get(f'opportunity{i}_value_period'),
+                    'confidence': int(row[f'opportunity{i}_confidence']),
+                    'status': row.get(f'opportunity{i}_status'),
+                    'date_won': str(parse_date(row[f'opportunity{i}_date_won']))
                 }
                 if args.confirmed:
                     api.post('opportunity', data=opp_payload)
             else:
-                logging.error(f'line {c.line_num} is not a fully filled opportunity {i}, skipped')
+                logging.error(f'line {csv_reader.line_num} is not a fully filled opportunity {i}, skipped')
 
     except Exception as e:
-        logging.error(f'line {c.line_num} skipped with error {e}')
+        logging.error(f'line {csv_reader.line_num} skipped with error {e}')
         skipped_leads += 1
-        r['Validation Error'] = e
-        error_array.append(r)
+        row['Validation Error'] = e
+        error_array.append(row)
         if not args.continue_on_error:
             logging.info('stopped on error')
             sys.exit(1)
 
 logging.info(f'summary: updated[{updated_leads}], new[{new_leads}], skipped[{skipped_leads}]')
 
-if len(error_array) > 1:
+if error_array:
     f = open(f'{org_name} Bulk Update Errored Rows.csv', 'wt', encoding='utf-8')
     try:
-        keys = error_array[0].keys()
-        ordered_keys = ['Validation Error'] + c.fieldnames
+        ordered_keys = ['Validation Error'] + csv_reader.fieldnames
         writer = csv.DictWriter(f, ordered_keys)
+        writer.writeheader()
         writer.writerows(error_array)
     finally:
         f.close()
