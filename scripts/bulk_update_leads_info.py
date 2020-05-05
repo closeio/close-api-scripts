@@ -193,9 +193,6 @@ for row in csv_reader:
     if custom_patches:
         payload.update(custom_patches)
 
-    if row.get(unique_field_name):
-        payload.update({unique_field_name.replace("unique.custom.", "custom."): row[unique_field_name]})
-
     try:
         lead = None
         if row.get('lead_id') is not None:
