@@ -39,6 +39,8 @@ key columns:
     * email_address                     - If lead_id is empty or does not exist and company is empty, imports to
                                           first lead from found email address. If the email address was
                                           not found, loads as new lead.
+    * unique.custom.[CUSTOM FIELD NAME] - If lead_is is empty or does not exist, imports to
+                                          first lead from found custom field.
 lead columns:
     * url                               - lead url
     * description                       - lead description
@@ -80,7 +82,7 @@ log_format = "[%(asctime)s] %(levelname)s %(message)s"
 if not args.confirmed:
     log_format = 'DRY RUN: ' + log_format
 logging.basicConfig(level=logging.INFO, format=log_format)
-logging.debug('parameters: %s' % vars(args))
+logging.debug(f'parameters: {vars(args)}')
 
 sniffer = csv.Sniffer()
 dialect = sniffer.sniff(args.csvfile.read(1000000))
@@ -122,12 +124,12 @@ if new_custom_fieldnames:
             if args.confirmed:
                 api.post('custom_fields/lead', data={'name': field, 'type': 'text'})
             available_custom_fieldnames.append(field)
-            logging.info('added new custom field "%s"' % field)
+            logging.info(f'added new custom field "{field}"')
     else:
-        logging.error('unknown custom fieldnames: %s' % new_custom_fieldnames)
+        logging.error(f'unknown custom fieldnames: {new_custom_fieldnames}')
         sys.exit(1)
 
-logging.debug('avaliable custom fields: %s' % available_custom_fieldnames)
+logging.debug(f'avaliable custom fields: {available_custom_fieldnames}')
 
 updated_leads = 0
 new_leads = 0
@@ -156,10 +158,10 @@ for r in c:
     contacts = []
     for idx in contact_indexes:
         contact = {}
-        if r.get('contact%s_name' % idx):
-            contact['name'] = r['contact%s_name' % idx]
-        if r.get('contact%s_title' % idx):
-            contact['title'] = r['contact%s_title' % idx]
+        if r.get(f'contact{idx}_name'):
+            contact['name'] = r[f'contact{idx}_name']
+        if r.get(f'contact{idx}_title'):
+            contact['title'] = r[f'contact{idx}_title']
         phones = get_contact_info(idx, r, 'phone', 'office')
         if phones:
             contact['phones'] = phones
@@ -179,8 +181,8 @@ for r in c:
     for idx in addresses_indexes:
         address = {}
         for z in ['country', 'city', 'zipcode', 'label', 'state', 'address_1', 'address_2']:
-            if r.get('address%s_%s' % (idx, z)):
-                address[z] = r['address%s_%s' % (idx, z)]
+            if r.get(f'address{idx}_{z}'):
+                address[z] = r[f'address{idx}_{z}']
         if address:
             addresses.append(address)
     if addresses:
@@ -206,72 +208,65 @@ for r in c:
         lead = None
         if r.get('lead_id') is not None:
             # exists lead
-            resp = api.get('lead/%s' % r['lead_id'])
-            logging.debug('received: %s' % resp)
+            resp = api.get(f'lead/{r["lead_id"]}')
+            logging.debug(f'received: {resp}')
             lead = resp
 
         elif r.get(unique_field) is not None:
             field = unique_field.replace("unique.custom.", "custom.")
             resp = api.get('lead', params={
-                'query': '"%s":"%s" sort:created' % (field, r[unique_field]),
+                'query': f'"{field}":"{r[unique_field]}" sort:created',
                 '_fields': 'id,display_name,name,contacts,custom',
                 'limit': 1
             })
-            logging.debug('received: %s' % resp)
+            logging.debug(f'received: {resp}')
             if resp['total_results']:
                 lead = resp['data'][0]
 
         elif r.get('email_address') is not None:
             resp = api.get('lead', params={
-                'query': 'email_address:"%s" sort:created' % r['email_address'],
+                'query': f'email_address:"{r["email_address"]}" sort:created',
                 '_fields': 'id,display_name,name,contacts,custom',
                 'limit': 1
             })
-            logging.debug('received: %s' % resp)
+            logging.debug(f'received: {resp}')
             if resp['total_results']:
                 lead = resp['data'][0]
 
         else:
             # first lead in the company
             resp = api.get('lead', params={
-                'query': 'company:"%s" sort:created' % r['company'],
+                'query': f'company:"{r["company"]}" sort:created',
                 '_fields': 'id,display_name,name,contacts,custom',
                 'limit': 1
             })
-            logging.debug('received: %s' % resp)
+            logging.debug(f'received: {resp}')
             if resp['total_results']:
                 lead = resp['data'][0]
 
         if lead:
-            logging.debug('to sent: %s' % payload)
+            logging.debug(f'to sent: {payload}')
             if args.confirmed:
                 if len(multi_select_fields) > 0 and lead.get('custom'):
                     for key in multi_select_fields:
                         if payload.get('custom.' + key) and lead['custom'].get(key):
                             payload['custom.' + key] = lead['custom'][key] + payload['custom.' + key]
                 api.put('lead/' + lead['id'], data=payload)
-            logging.info('line %d updated: %s %s' % (c.line_num,
-                                                     lead['id'],
-                                                     lead.get('name') if lead.get('name') else ''))
+            logging.info(f'line {c.line_num} updated: {lead["id"]} {lead.get("name") if lead.get("name") else ""}')
             updated_leads += 1
         # new lead
         elif lead is None and not args.disable_create:
-            logging.debug('to sent: %s' % payload)
+            logging.debug(f'to sent: {payload}')
             if args.confirmed:
                 lead = api.post('lead', data=payload)
-                logging.info('line %d new: %s %s' % (c.line_num,
-                                                     lead['id'] if args.confirmed else 'X',
-                                                     lead['display_name']))
+                logging.info(f'line {c.line_num} new: {lead["id"] if args.confirmed else "X"} {lead["display_name"]}')
             else:
-                logging.info('line %d new lead for: %s' % (c.line_num,
-                                                           r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
+                logging.info(f'line {c.line_num} new lead for: {r["company"] if r.get("company") else r.get("email_address") or r.get(unique_field)}')
             new_leads += 1
-
         elif lead is None and args.disable_create:
             r['Validation Error'] = 'Lead does not exist in Close'
             skipped_leads += 1
-            logging.info('line %d skipped: %s does not exist in Close.io' % (c.line_num,
-                                                                             r['company'] if r.get('company') else r.get('email_address') or r.get(unique_field)))
+            logging.info(f'line {c.line_num} skipped: {r["company"] if r.get("company") else r.get("email_address") or r.get(unique_field)} does not exist in Close.io')
             error_array.append(r)
             continue
 
@@ -279,32 +274,33 @@ for r in c:
         for note in notes:
             if args.confirmed:
                 resp = api.post('activity/note', data={'note': note, 'lead_id': lead['id']})
-            logging.debug('%s new note: %s' % (lead['id'] if args.confirmed else 'X', note.decode('utf-8')))
+            logging.debug(f'{lead["id"] if args.confirmed else "X"} new note: {note.decode("utf-8")}')
 
         opportunity_ids = {x[len('opportunity')] for x in c.fieldnames if re.match(r'opportunity[0-9]', x)}
         for i in opportunity_ids:
             opp_payload = None
             if all([r.get(x % i) for x in OPPORTUNITY_FIELDS]):
-                if r['opportunity%s_value_period' % i] not in ('one_time', 'monthly', 'annual'):
-                    logging.error(f'line {c.line_num} invalid value_period "{r["opportunity%s_value_period" % i]}" for lead {lead["id"]}, opportunity {i}')
+                if r[f'opportunity{i}_value_period'] not in ('one_time', 'monthly', 'annual'):
+                    value_period = r[f"opportunity{i}_value_period"]
+                    logging.error(f'line {c.line_num} invalid value_period "{value_period}" for opportunity {i}')
                     continue
 
                 opp_payload = {
                     'lead_id': lead['id'],
-                    'note': r.get('opportunity%s_note' % i),
-                    'value': int(r['opportunity%s_value' % i]) if r.get('opportunity%s_value' % i) else None,  # assumes cents are given
-                    'value_period': r.get('opportunity%s_value_period' % i),
-                    'confidence': int(r['opportunity%s_confidence' % i]) if r.get('opportunity%s' % i) else None,
-                    'status': r.get('opportunity%s_status' % i),
-                    'date_won': str(parse_date(r['opportunity%s_date_won' % i])) if r.get('opportunity%s_date_won' % i) else None
+                    'note': r.get(f'opportunity{i}_note'),
+                    'value': int(r[f'opportunity{i}_value']),  # assumes cents are given
+                    'value_period': r.get(f'opportunity{i}_value_period'),
+                    'confidence': int(r[f'opportunity{i}_confidence']),
+                    'status': r.get(f'opportunity{i}_status'),
+                    'date_won': str(parse_date(r[f'opportunity{i}_date_won']))
                 }
                 if args.confirmed:
                     api.post('opportunity', data=opp_payload)
             else:
-                logging.error('line %d is not a fully filled opportunity %s, skipped' % (c.line_num, i))
+                logging.error(f'line {c.line_num} is not a fully filled opportunity {i}, skipped')
 
     except Exception as e:
-        logging.error('line %d skipped with error %s' % (c.line_num, e))
+        logging.error(f'line {c.line_num} skipped with error {e}')
         skipped_leads += 1
         r['Validation Error'] = e
         error_array.append(r)
@@ -312,7 +308,7 @@ for r in c:
             logging.info('stopped on error')
             sys.exit(1)
 
-logging.info('summary: updated[%d], new[%d], skipped[%d]' % (updated_leads, new_leads, skipped_leads))
+logging.info(f'summary: updated[{updated_leads}], new[{new_leads}], skipped[{skipped_leads}]')
 
 if len(error_array) > 1:
     f = open(f'{org_name} Bulk Update Errored Rows.csv', 'wt', encoding='utf-8')
