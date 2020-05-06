@@ -195,8 +195,9 @@ for row in csv_reader:
 
     try:
         lead = None
+
+        # Get the existing lead
         if row.get('lead_id') is not None:
-            # exists lead
             resp = api.get(f'lead/{row["lead_id"]}')
             logging.debug(f'received: {resp}')
             lead = resp
@@ -220,7 +221,6 @@ for row in csv_reader:
             if resp['total_results']:
                 lead = resp['data'][0]
         else:
-            # first lead in the company
             resp = api.get('lead', params={
                 'query': f'company:"{row["company"]}" sort:created',
                 '_fields': 'id,display_name,name,contacts,custom',
@@ -230,6 +230,7 @@ for row in csv_reader:
             if resp['total_results']:
                 lead = resp['data'][0]
 
+        # If it exist, update it
         if lead:
             logging.debug(f'to sent: {payload}')
             if args.confirmed:
@@ -241,31 +242,37 @@ for row in csv_reader:
             logging.info(f'line {csv_reader.line_num} updated: {lead["id"]} {lead.get("name") if lead.get("name") else ""}')
             updated_leads += 1
 
-        # new lead
+        # If it doesn't exist, create it if disable_create is false
         elif lead is None and not args.disable_create:
             logging.debug(f'to sent: {payload}')
             if args.confirmed:
                 lead = api.post('lead', data=payload)
                 logging.info(f'line {csv_reader.line_num} new: {lead["id"] if args.confirmed else "X"} {lead["display_name"]}')
             else:
-                logging.info(f'line {csv_reader.line_num} new lead for: {row["company"] if row.get("company") else row.get("email_address") or row.get(unique_field_name)}')
+                company_name = row["company"] if row.get("company") else row.get("email_address") or row.get(unique_field_name)
+                logging.info(f'line {csv_reader.line_num} new lead for: {company_name}')
             new_leads += 1
+
+        # If it doesn't exist and disable_create it true - skip it
         elif lead is None and args.disable_create:
             row['Validation Error'] = 'Lead does not exist in Close'
             skipped_leads += 1
-            logging.info(f'line {csv_reader.line_num} skipped: {row["company"] if row.get("company") else row.get("email_address") or row.get(unique_field_name)} does not exist in Close.io')
+
+            company_name = row["company"] if row.get("company") else row.get("email_address") or row.get(unique_field_name)
+            logging.info(f'line {csv_reader.line_num} skipped: {company_name} does not exist in Close.io')
             error_array.append(row)
             continue
 
+        # Notes
         notes = [row[x] for x in row.keys() if re.match(r'note[0-9]', x) and row[x]]
         for note in notes:
             if args.confirmed:
                 resp = api.post('activity/note', data={'note': note, 'lead_id': lead['id']})
             logging.debug(f'{lead["id"] if args.confirmed else "X"} new note: {note}')
 
-        opportunity_ids = {x[len('opportunity')] for x in csv_reader.fieldnames if re.match(r'opportunity[0-9]', x)}
+        # Opportunities
+        opportunity_ids = {x[len('opportunity')] for x in csv_reader.fieldnames if re.match(r'opportunity[0-9]', x)}  # Extract the opportunity indexes if we have opportunity1_note, but missing opportunity0_note
         for i in opportunity_ids:
-            opp_payload = None
             if all([row.get(x % i) for x in OPPORTUNITY_FIELDS]):
                 if row[f'opportunity{i}_value_period'] not in ('one_time', 'monthly', 'annual'):
                     value_period = row[f"opportunity{i}_value_period"]
@@ -285,7 +292,6 @@ for row in csv_reader:
                     api.post('opportunity', data=opp_payload)
             else:
                 logging.error(f'line {csv_reader.line_num} is not a fully filled opportunity {i}, skipped')
-
     except Exception as e:
         logging.error(f'line {csv_reader.line_num} skipped with error {e}')
         skipped_leads += 1
@@ -300,8 +306,8 @@ logging.info(f'summary: updated[{updated_leads}], new[{new_leads}], skipped[{ski
 if error_array:
     f = open(f'{org_name} Bulk Update Errored Rows.csv', 'wt', encoding='utf-8')
     try:
-        ordered_keys = ['Validation Error'] + csv_reader.fieldnames
-        writer = csv.DictWriter(f, ordered_keys)
+        keys = ['Validation Error'] + csv_reader.fieldnames
+        writer = csv.DictWriter(f, keys)
         writer.writeheader()
         writer.writerows(error_array)
     finally:
