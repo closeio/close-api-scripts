@@ -28,6 +28,19 @@ def get_contact_info(contact_no, csv_row, what, contact_type):
     return contact_info
 
 
+def get_custom_fields(type):
+    fields = []
+    has_more = True
+    offset = 0
+    params = {}
+    while has_more:
+        resp = api.get(f'custom_fields/{type}', params=params)
+        fields.extend(resp['data'])
+        offset += len(resp['data'])
+        has_more = resp['has_more']
+    return fields
+
+
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description="""
 Imports leads and related data from a csv file with header.
 Header's columns may be declared in any order. Detects csv dialect (delimeter and quotechar).
@@ -35,42 +48,43 @@ Header's columns may be declared in any order. Detects csv dialect (delimeter an
 Any indexed attribute such as notes, addresses, opportunities, or contacts does NOT need to start from 0.
 """, epilog="""
 key columns:
-    * lead_id                           - If exists and not empty, update using lead_id.
-    * company                           - If lead_id is empty or does not exist, imports to
-                                          first lead from found company. If the company was
-                                          not found, loads as new lead.
-    * email_address                     - If lead_id is empty or does not exist and company is empty, imports to
-                                          first lead from found email address. If the email address was
-                                          not found, loads as new lead.
-    * unique.custom.[CUSTOM FIELD NAME] - If lead_is is empty or does not exist, imports to
-                                          first lead from found custom field.
+    * lead_id                                   - If exists and not empty, update using lead_id.
+    * company                                   - If lead_id is empty or does not exist, imports to
+                                                  first lead from found company. If the company was
+                                                  not found, loads as new lead.
+    * email_address                             - If lead_id is empty or does not exist and company is empty, imports to
+                                                  first lead from found email address. If the email address was
+                                                  not found, loads as new lead.
+    * unique.custom.[custom_field_name]         - If lead_is is empty or does not exist, imports to
+                                                  first lead from found custom field.
 lead columns:
-    * url                               - lead url
-    * description                       - lead description
-    * status                            - lead status
-    * note[0-9]                         - lead notes
-    * address[0-9]_country              - ISO 3166-1 alpha-2 country code
-    * address[0-9]_city                 - city
-    * address[0-9]_zipcode              - zipcode
-    * address[0-9]_label                - label (business, mailing, other)
-    * address[0-9]_state                - state
-    * address[0-9]_address_1            - text part 1
-    * address[0-9]_address_2            - text part 2
+    * url                                       - lead url
+    * description                               - lead description
+    * status                                    - lead status
+    * note[0-9]                                 - lead notes
+    * address[0-9]_country                      - ISO 3166-1 alpha-2 country code
+    * address[0-9]_city                         - city
+    * address[0-9]_zipcode                      - zipcode
+    * address[0-9]_label                        - label (business, mailing, other)
+    * address[0-9]_state                        - state
+    * address[0-9]_address_1                    - text part 1
+    * address[0-9]_address_2                    - text part 2
 opportunity columns (new items will be added if all values filled):
-    * opportunity[0-9]_note             - opportunity note
-    * opportunity[0-9]_value            - opportunity value in cents
-    * opportunity[0-9]_value_period     - will have a value like one_time or monthly
-    * opportunity[0-9]_confidence       - opportunity confidence
-    * opportunity[0-9]_status           - opportunity status
-    * opportunity[0-9]_date_won         - opportunity date won
+    * opportunity[0-9]_note                     - opportunity note
+    * opportunity[0-9]_value                    - opportunity value in cents
+    * opportunity[0-9]_value_period             - will have a value like one_time or monthly
+    * opportunity[0-9]_confidence               - opportunity confidence
+    * opportunity[0-9]_status                   - opportunity status
+    * opportunity[0-9]_date_won                 - opportunity date won
 contact columns (new contacts wil be added):
-    * contact[0-9]_name                 - contact name
-    * contact[0-9]_title                - contact title
-    * contact[0-9]_phone[0-9]           - contact phones
-    * contact[0-9]_email[0-9]           - contact emails
-    * contact[0-9]_url[0-9]             - contact urls
-custom columns (new custom field with type `text` will be created if not exists):
-    * custom.[custom_field_name]        - value of custom_field_name; if multiple choice separate values with ;
+    * contact[0-9]_name                         - contact name
+    * contact[0-9]_title                        - contact title
+    * contact[0-9]_phone[0-9]                   - contact phones
+    * contact[0-9]_email[0-9]                   - contact emails
+    * contact[0-9]_url[0-9]                     - contact urls
+    * contact[0-9]_custom.[custom_field_name]   - value of custom_field_name; if multiple choice separate values with ;
+lead custom columns (new custom field with type `text` will be created if it does not exist):
+    * custom.[custom_field_name]                - value of custom_field_name; if multiple choice separate values with ;
 """)
 
 parser.add_argument('csvfile', type=argparse.FileType('rU'), help='csv file')
@@ -84,7 +98,7 @@ args = parser.parse_args()
 # Set up logging configuration
 log_format = "[%(asctime)s] %(levelname)s %(message)s"
 if not args.confirmed:
-    log_format = 'DRY RUN: ' + log_format
+    log_format = f'DRY RUN: {log_format}'
 logging.basicConfig(level=logging.INFO, format=log_format)
 logging.debug(f'parameters: {vars(args)}')
 
@@ -102,26 +116,27 @@ unique_field_name = next(iter([i for i in csv_reader.fieldnames if i.startswith(
 
 api = CloseIO_API(args.api_key)
 org_id = api.get('me')['organizations'][0]['id']
-org = api.get('organization/' + org_id)
+org = api.get(f'organization/{org_id}')
 org_name = org['name']
 
-resp = org['lead_custom_fields']
-available_custom_fieldnames = [x['name'] for x in resp]
-new_custom_fieldnames = [x for x in [y.split('.', 1)[1] for y in csv_reader.fieldnames if y.startswith('custom.')] if x not in available_custom_fieldnames]
-multi_select_fields = [x['name'] for x in resp if x['accepts_multiple_values']]
+lead_custom_fields = get_custom_fields('lead')
 
-if new_custom_fieldnames:
+csv_lead_custom_fieldnames = [y.split('.', 1)[1] for y in csv_reader.fieldnames if y.startswith('custom.')]
+lead_new_custom_fieldnames = [x for x in csv_lead_custom_fieldnames if not any([y for y in lead_custom_fields if y['name'] == x])]
+if lead_new_custom_fieldnames:
     if args.create_custom_fields:
-        for field in new_custom_fieldnames:
+        for field in lead_new_custom_fieldnames:
             if args.confirmed:
-                api.post('custom_fields/lead', data={'name': field, 'type': 'text'})
-            available_custom_fieldnames.append(field)
+                resp = api.post('custom_fields/lead', data={'name': field, 'type': 'text'})
+                lead_custom_fields.append(resp)
+            else:
+                lead_custom_fields.append({'name': field, 'type': 'text'})
             logging.info(f'added new custom field "{field}"')
     else:
-        logging.error(f'unknown custom fieldnames: {new_custom_fieldnames}')
+        logging.error(f'unknown custom fieldnames: {lead_new_custom_fieldnames}')
         sys.exit(1)
 
-logging.debug(f'avaliable custom fields: {available_custom_fieldnames}')
+logging.debug(f'available lead custom fields: {[x["name"] for x in lead_custom_fields]}')
 
 updated_leads = 0
 new_leads = 0
@@ -146,6 +161,7 @@ for row in csv_reader:
         payload['status'] = row['status']
 
     # Contacts
+    # Create them only if contact name is defined
     contact_indexes = [y[len('contact')] for y in row.keys() if re.match(r'contact[0-9]_name', y)]  # Extract the contact indexes if we have contact1_name, but missing contact0_name
     contacts = []
     for idx in contact_indexes:
@@ -163,6 +179,7 @@ for row in csv_reader:
         urls = get_contact_info(idx, row, 'url', 'url')
         if urls:
             contact['urls'] = urls
+
         if contact:
             contacts.append(contact)
     if contacts:
@@ -181,17 +198,17 @@ for row in csv_reader:
     if addresses:
         payload['addresses'] = addresses
 
-    # Custom fields - add them only if they are available in Close org and exist
-    custom_keys = [key for key in row if key.startswith('custom.') and key.split('.', 1)[1] in available_custom_fieldnames and row[key]]
+    # Custom fields
+    row_custom_fieldnames = [x.split('.', 1)[1] for x in row if x.startswith('custom.') and row[x]]  # Get the non-emtpy fields and remove the custom. prefix
+    custom_fields = [x for x in lead_custom_fields if x['name'] in row_custom_fieldnames]  # Get the real custom field objects based on their names
     custom_patches = {}
-    for key in custom_keys:
-        if key.replace('custom.', '') in multi_select_fields:
+    for custom_field in custom_fields:
+        key = f'custom.{custom_field["name"]}'
+        if custom_field.get('accepts_multiple_values'):
             custom_patches[key] = [i.strip() for i in row[key].split(CUSTOM_FIELD_MULTIPLE_SELECT_VALUE_SEPARATOR)]
         else:
             custom_patches[key] = row[key]
-
-    if custom_patches:
-        payload.update(custom_patches)
+    payload.update(custom_patches)
 
     try:
         lead = None
@@ -234,10 +251,12 @@ for row in csv_reader:
         if lead:
             logging.debug(f'to sent: {payload}')
             if args.confirmed:
-                if len(multi_select_fields) > 0 and lead.get('custom'):
-                    for key in multi_select_fields:
-                        if payload.get('custom.' + key) and lead['custom'].get(key):
-                            payload['custom.' + key] = lead['custom'][key] + payload['custom.' + key]
+                # Append multi-select custom field values to existing lead values
+                for custom_field in lead_custom_fields:
+                    key = custom_field["name"]
+                    if custom_field.get('accepts_multiple_values') and payload.get(f'custom.{key}') and lead['custom'].get(key):
+                        payload[f'custom.{key}'] = lead['custom'][key] + payload[f'custom.{key}']
+
                 api.put(f'lead/{lead["id"]}', data=payload)
             logging.info(f'line {csv_reader.line_num} updated: {lead["id"]} {lead.get("name") if lead.get("name") else ""}')
             updated_leads += 1
