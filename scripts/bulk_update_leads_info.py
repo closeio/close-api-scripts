@@ -41,6 +41,34 @@ def get_custom_fields(type):
     return fields
 
 
+def create_missing_custom_fields(type):
+    if type == 'contact':
+        csv_custom_fieldnames = [y.split('.', 1)[1] for y in csv_reader.fieldnames if re.match(r'contact[0-9]_custom.*', y)]
+        new_custom_fieldnames = [x for x in csv_custom_fieldnames if not any([y for y in contact_custom_fields if y['name'] == x])]
+    elif type == 'lead':
+        csv_custom_fieldnames = [y.split('.', 1)[1] for y in csv_reader.fieldnames if y.startswith('custom.')]
+        new_custom_fieldnames = [x for x in csv_custom_fieldnames if not any([y for y in lead_custom_fields if y['name'] == x])]
+    else:
+        return
+
+    new_custom_fields = []
+
+    if new_custom_fieldnames:
+        if args.create_custom_fields:
+            for field in new_custom_fieldnames:
+                if args.confirmed:
+                    resp = api.post(f'custom_fields/{type}', data={'name': field, 'type': 'text'})
+                    new_custom_fields.append(resp)
+                else:
+                    new_custom_fields.append({'name': field, 'type': 'text'})
+                logging.info(f'added new custom field "{field}"')
+        else:
+            logging.error(f'unknown {type} custom fieldnames: {new_custom_fieldnames}')
+            sys.exit(1)
+
+    return new_custom_fields
+
+
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, description="""
 Imports leads and related data from a csv file with header.
 Header's columns may be declared in any order. Detects csv dialect (delimeter and quotechar).
@@ -120,23 +148,12 @@ org = api.get(f'organization/{org_id}')
 org_name = org['name']
 
 lead_custom_fields = get_custom_fields('lead')
+contact_custom_fields = get_custom_fields('contact')
 
-csv_lead_custom_fieldnames = [y.split('.', 1)[1] for y in csv_reader.fieldnames if y.startswith('custom.')]
-lead_new_custom_fieldnames = [x for x in csv_lead_custom_fieldnames if not any([y for y in lead_custom_fields if y['name'] == x])]
-if lead_new_custom_fieldnames:
-    if args.create_custom_fields:
-        for field in lead_new_custom_fieldnames:
-            if args.confirmed:
-                resp = api.post('custom_fields/lead', data={'name': field, 'type': 'text'})
-                lead_custom_fields.append(resp)
-            else:
-                lead_custom_fields.append({'name': field, 'type': 'text'})
-            logging.info(f'added new custom field "{field}"')
-    else:
-        logging.error(f'unknown custom fieldnames: {lead_new_custom_fieldnames}')
-        sys.exit(1)
-
+lead_custom_fields.extend(create_missing_custom_fields('lead'))
 logging.debug(f'available lead custom fields: {[x["name"] for x in lead_custom_fields]}')
+contact_custom_fields.extend(create_missing_custom_fields('contact'))
+logging.debug(f'available contact custom fields: {[x["name"] for x in contact_custom_fields]}')
 
 updated_leads = 0
 new_leads = 0
@@ -179,6 +196,21 @@ for row in csv_reader:
         urls = get_contact_info(idx, row, 'url', 'url')
         if urls:
             contact['urls'] = urls
+
+        # Custom fields
+        row_custom_fieldnames = [x.split('.', 1)[1] for x in row if re.match(r'contact%s_custom.*' % idx, x) and row[x]]  # Get the non-emtpy fields and remove the custom. prefix
+        custom_fields = [x for x in contact_custom_fields if x['name'] in row_custom_fieldnames]  # Get the real custom field objects based on their names
+        custom_patches = {}
+        for custom_field in custom_fields:
+            id = custom_field["id"]
+            name = custom_field["name"]
+            row_key = f'contact{idx}_custom.{name}'
+
+            if custom_field.get('accepts_multiple_values'):
+                custom_patches[f'custom.{id}'] = [i.strip() for i in row[row_key].split(CUSTOM_FIELD_MULTIPLE_SELECT_VALUE_SEPARATOR)]
+            else:
+                custom_patches[f'custom.{id}'] = row[row_key]
+        contact.update(custom_patches)
 
         if contact:
             contacts.append(contact)
