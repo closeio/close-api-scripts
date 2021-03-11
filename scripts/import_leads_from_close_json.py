@@ -3,11 +3,14 @@ import copy
 import json
 
 import gevent.monkey
-gevent.monkey.patch_all()
-from closeio_api import Client as CloseIO_API, APIError
+from closeio_api import APIError, Client as CloseIO_API
 from gevent.pool import Pool
 
-parser = argparse.ArgumentParser(description='Import Close Leads from a Close JSON file into a New Org')
+gevent.monkey.patch_all()
+
+parser = argparse.ArgumentParser(
+    description='Import Close Leads from a Close JSON file into a New Org'
+)
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
 parser.add_argument('--jsonfile', '-j', required=True, help='JSON File Path')
 args = parser.parse_args()
@@ -15,7 +18,10 @@ api = CloseIO_API(args.api_key)
 
 # Create a list of active users for the sake of posting opps and activities.
 me = api.get('me')
-org = api.get('organization/' + me['organizations'][0]['id'], params={'_fields': 'memberships,inactive_memberships,name'})
+org = api.get(
+    'organization/' + me['organizations'][0]['id'],
+    params={'_fields': 'memberships,inactive_memberships,name'},
+)
 org_name = org['name']
 active_users = [i['user_id'] for i in org['memberships']]
 all_users = active_users + [i['user_id'] for i in org['inactive_memberships']]
@@ -50,7 +56,11 @@ def postStatus(lead_or_opp, label, status_type):
 
 
 # Make sure all lead and opp statuses are in Close
-lead_statuses_labels_in_json = [i['status_label'] for i in data if i['status_label'] not in lead_status_labels]
+lead_statuses_labels_in_json = [
+    i['status_label']
+    for i in data
+    if i['status_label'] not in lead_status_labels
+]
 lead_statuses_labels_in_json = list(set(lead_statuses_labels_in_json))
 for label in lead_statuses_labels_in_json:
     postStatus('lead', label, None)
@@ -74,7 +84,11 @@ def importOpportunities(opp_data, new_lead_id):
             del opp['organization_id']
         if opp['user_id'] not in active_users:
             opp['user_id'] = apikey_user_id
-        if 'contact_id' in opp and opp['contact_id'] != None and opp['contact_id'] in contact_id_mapping:
+        if (
+            'contact_id' in opp
+            and opp['contact_id'] != None
+            and opp['contact_id'] in contact_id_mapping
+        ):
             opp['contact_id'] = contact_id_mapping[opp['contact_id']]
         opp['status'] = opp['status_label']
         del opp['status_id']
@@ -103,23 +117,36 @@ def importTasks(task_data, new_lead_id):
 
 # Import call, note, and SMS data to new lead. Assume that emails will be brought over via email sync.
 def importActivities(activity_data, new_lead_id):
-    types = {'Call': 'activity/call', 'SMS': 'activity/sms', 'Note': 'activity/note'}
+    types = {
+        'Call': 'activity/call',
+        'SMS': 'activity/sms',
+        'Note': 'activity/note',
+    }
     for activity in activity_data:
         if 'organization_id' in activity:
             del activity['organization_id']
         activity['lead_id'] = new_lead_id
-        if 'contact_id' in activity and activity['contact_id'] != None and activity['contact_id'] in contact_id_mapping:
+        if (
+            'contact_id' in activity
+            and activity['contact_id'] != None
+            and activity['contact_id'] in contact_id_mapping
+        ):
             activity['contact_id'] = contact_id_mapping[activity['contact_id']]
         if activity['_type'] == 'Call':
             if 'quality_info' in activity:
                 del activity['quality_info']
             activity['source'] = 'External'
-        if activity['_type'] == 'SMS' and activity['status'] in ['outbox', 'scheduled']:
+        if activity['_type'] == 'SMS' and activity['status'] in [
+            'outbox',
+            'scheduled',
+        ]:
             activity['status'] = 'draft'
         try:
             api.post(types[activity['_type']], data=activity)
         except APIError as e:
-            print(f"Could not post {activity['_type']} activity to {new_lead_id} because {str(e)}")
+            print(
+                f"Could not post {activity['_type']} activity to {new_lead_id} because {str(e)}"
+            )
 
 
 # Remove task completed activities from top of lead.
@@ -128,7 +155,10 @@ def removeTaskCompletedActivities(new_lead_id):
     offset = 0
     task_completed_ids = []
     while has_more:
-        resp_task_completed = api.get('activity/task_completed', params={'_skip': offset, 'lead_id': new_lead_id, '_fields': 'id'})
+        resp_task_completed = api.get(
+            'activity/task_completed',
+            params={'_skip': offset, 'lead_id': new_lead_id, '_fields': 'id'},
+        )
         task_completed_ids = [i['id'] for i in resp_task_completed['data']]
         offset += len(resp_task_completed['data'])
         has_more = resp_task_completed['has_more']
@@ -137,7 +167,9 @@ def removeTaskCompletedActivities(new_lead_id):
         try:
             api.delete('activity/task_completed/' + completed_id)
         except APIError as e:
-            print(f"Cannot delete completed task activity {completed_id} because {str(e)}")
+            print(
+                f"Cannot delete completed task activity {completed_id} because {str(e)}"
+            )
 
 
 def restoreLead(lead):
@@ -152,7 +184,11 @@ def restoreLead(lead):
     # Clear users ids that have never been in the new Close org from user type custom fields:
     custom_data = copy.deepcopy(lead['custom'])
     for custom in lead['custom']:
-        if lead['custom'].get(custom) and str(lead['custom'][custom]).startswith('user_') and lead['custom'][custom] not in all_users:
+        if (
+            lead['custom'].get(custom)
+            and str(lead['custom'][custom]).startswith('user_')
+            and lead['custom'][custom] not in all_users
+        ):
             del custom_data[custom]
     lead_data['custom'] = custom_data
     lead_data['custom']['Original Lead ID'] = lead['id']
@@ -171,7 +207,9 @@ def restoreLead(lead):
             new_lead_id = post_lead['id']
             # Create contact mapping dictionary
             for i in range(0, len(lead['contacts'])):
-                contact_id_mapping[lead['contacts'][i]['id']] = post_lead['contacts'][i]['id']
+                contact_id_mapping[lead['contacts'][i]['id']] = post_lead[
+                    'contacts'
+                ][i]['id']
             # Import Opportunities
             if 'opportunities' in lead and len(lead['opportunities']) > 0:
                 importOpportunities(lead['opportunities'], new_lead_id)
@@ -182,7 +220,11 @@ def restoreLead(lead):
                 removeTaskCompletedActivities(new_lead_id)
             # Import Call, SMS, and Note data. We assume email data will be transfered over automatically
             if 'activities' in lead and len(lead['activities']) > 0:
-                activity_array = [i for i in lead['activities'] if i['_type'] in ['Call', 'Note', 'SMS']]
+                activity_array = [
+                    i
+                    for i in lead['activities']
+                    if i['_type'] in ['Call', 'Note', 'SMS']
+                ]
                 importActivities(activity_array, new_lead_id)
             total_leads_imported.append(new_lead_id)
             print(f"{len(total_leads_imported)}: Imported {lead['id']}")
@@ -200,5 +242,7 @@ print(f"Total leads not restored {(len(data) - len(total_leads_imported))}")
 
 # Write errored lead_ids to JSON File
 if len(errored_leads) > 0:
-    with open(f'{org_name} Errored Leads from JSON Import.json', 'w') as outfile:
+    with open(
+        f'{org_name} Errored Leads from JSON Import.json', 'w'
+    ) as outfile:
         json.dump(errored_leads, outfile, indent=4)

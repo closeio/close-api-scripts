@@ -5,10 +5,18 @@ import sys
 
 from closeio_api import Client as CloseIO_API
 
-parser = argparse.ArgumentParser(description='Remove tasks associated with inactive users')
+parser = argparse.ArgumentParser(
+    description='Remove tasks associated with inactive users'
+)
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--confirmed', action='store_true', help='Confirm making changes. Otherwise this script is not going to modify any data.')
-parser.add_argument('--verbose', '-v', action='store_true', help='Increase logging verbosity.')
+parser.add_argument(
+    '--confirmed',
+    action='store_true',
+    help='Confirm making changes. Otherwise this script is not going to modify any data.',
+)
+parser.add_argument(
+    '--verbose', '-v', action='store_true', help='Increase logging verbosity.'
+)
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
@@ -29,12 +37,15 @@ for idx, user_id in enumerate(inactive_users):
     skip = 0
     limit = 100
     while has_more:
-        resp = api.get('task', params={
-            'assigned_to': user_id,
-            '_skip': skip,
-            '_limit': limit,
-            '_fields': 'id',
-        })
+        resp = api.get(
+            'task',
+            params={
+                'assigned_to': user_id,
+                '_skip': skip,
+                '_limit': limit,
+                '_fields': 'id',
+            },
+        )
         task_ids.extend(t['id'] for t in resp['data'])
         has_more = resp['has_more']
         skip += limit
@@ -43,7 +54,9 @@ if args.verbose:
     print(f'Found {len(task_ids)} tasks')
 
 if not args.confirmed:
-    print('This is a dry run, so the tasks are not deleted. Use the --confirmed flag to delete them.')
+    print(
+        'This is a dry run, so the tasks are not deleted. Use the --confirmed flag to delete them.'
+    )
     sys.exit(0)
 
 total_cnt = len(task_ids)

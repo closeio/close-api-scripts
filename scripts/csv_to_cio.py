@@ -14,44 +14,55 @@ import unidecode
 from closeio_api import Client as CloseIO_API
 from closeio_api.utils import count_lines, title_case, uncamel
 from progressbar import ProgressBar
-from progressbar.widgets import Percentage, Bar, ETA, FileTransferSpeed
+from progressbar.widgets import ETA, Bar, FileTransferSpeed, Percentage
 from requests.exceptions import ConnectionError
 
 parser = argparse.ArgumentParser(description='Import leads from CSV file')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--skip_duplicates', action='store_true', help='Skip leads that are already present in Close.io (determined by company name).')
-parser.add_argument('--no_grouping', action='store_true', help='Turn off the default group-by-company behavior.')
+parser.add_argument(
+    '--skip_duplicates',
+    action='store_true',
+    help='Skip leads that are already present in Close.io (determined by company name).',
+)
+parser.add_argument(
+    '--no_grouping',
+    action='store_true',
+    help='Turn off the default group-by-company behavior.',
+)
 parser.add_argument('file', help='Path to the csv file')
 args = parser.parse_args()
 
 reader = csv.DictReader(open(args.file))
 headers = reader.fieldnames
 
-import_count = count_lines(args.file) # may have no trailing newline
+import_count = count_lines(args.file)  # may have no trailing newline
 
 cnt = success_cnt = 0
 
+
 def warning(*objs):
     print("WARNING: ", *objs, file=sys.stderr)
+
 
 def slugify(str, separator='_'):
     str = unidecode.unidecode(str).lower().strip()
     return re.sub(r'\W+', separator, str).strip(separator)
 
+
 # Look for headers/columns that match these, case-insensitive. All other headers will be treated as custom fields.
 expected_headers = (
-    'company', # multiple contacts will be grouped if company names match
+    'company',  # multiple contacts will be grouped if company names match
     'url',
     'status',
-    'contact', # name of contact
+    'contact',  # name of contact
     'title',
     'email',
-    'phone', # recommended to start with "+" followed by country code (e.g., +1 650 555 1234)
+    'phone',  # recommended to start with "+" followed by country code (e.g., +1 650 555 1234)
     'mobile_phone',
     'fax',
     'address',
-    'address_1', # if address is missing, address_1 and address_2 will be combined to create it.
-    'address_2', # if address is missing, address_1 and address_2 will be combined to create it.
+    'address_1',  # if address is missing, address_1 and address_2 will be combined to create it.
+    'address_2',  # if address is missing, address_1 and address_2 will be combined to create it.
     'city',
     'state',
     'zip',
@@ -69,37 +80,56 @@ if len(set(headers)) != len(headers):
 # Check for duplicates after normalization
 normalized_headers = [slugify(col) for col in headers]
 if len(set(normalized_headers)) != len(normalized_headers):
-    raise Exception('After column header names were normalized there were duplicate column header names')
+    raise Exception(
+        'After column header names were normalized there were duplicate column header names'
+    )
 
 # build a map of header names -> index in actual header row
-header_indices   = { col: i for (i, col) in enumerate(normalized_headers) } # normalized columns as keys
-header_indices.update({col: i for (i, col) in enumerate(headers)}) # add in original column names as keys
-expected_headers = [ col for col in normalized_headers if col in expected_headers ]
-custom_headers = list(set(normalized_headers) - set(expected_headers)) # non-recognized fields in slug-ed format
+header_indices = {
+    col: i for (i, col) in enumerate(normalized_headers)
+}  # normalized columns as keys
+header_indices.update(
+    {col: i for (i, col) in enumerate(headers)}
+)  # add in original column names as keys
+expected_headers = [
+    col for col in normalized_headers if col in expected_headers
+]
+custom_headers = list(
+    set(normalized_headers) - set(expected_headers)
+)  # non-recognized fields in slug-ed format
 
 # restore original version (capitalization) to custom fields
-custom_headers = [headers[header_indices[normalized_col]] for normalized_col in custom_headers]
+custom_headers = [
+    headers[header_indices[normalized_col]]
+    for normalized_col in custom_headers
+]
 
 print("\nRecognized these column names:")
 print(f'> {", ".join(expected_headers)}')
 if len(custom_headers):
-    print("\nThe following column names weren't recognized, and will be imported as custom fields:")
+    print(
+        "\nThe following column names weren't recognized, and will be imported as custom fields:"
+    )
     print(f'> {", ".join(custom_headers)}')
     print('')
 
+
 def lead_from_row(row):
-    row = {column_name: column_value.strip() for column_name, column_value in row.items()}  # strip unnecessary white spaces
-    
+    row = {
+        column_name: column_value.strip()
+        for column_name, column_value in row.items()
+    }  # strip unnecessary white spaces
+
     # check if the row isn't empty
-    has_data = {column_name: column_value for column_name, column_value in row.items() if column_value}
+    has_data = {
+        column_name: column_value
+        for column_name, column_value in row.items()
+        if column_value
+    }
     if not has_data:
         return None
 
-    lead = {
-        'name': row['company'],
-        'contacts': [],
-        'custom': {}
-    }
+    lead = {'name': row['company'], 'contacts': [], 'custom': {}}
 
     if 'url' in row:
         lead['url'] = row['url']
@@ -141,29 +171,17 @@ def lead_from_row(row):
 
     phones = []
     if 'phone' in row:
-        phones.append({
-            'phone': row['phone'],
-            'type': 'office'
-        })
+        phones.append({'phone': row['phone'], 'type': 'office'})
     if 'mobile_phone' in row:
-        phones.append({
-            'phone': row['mobile_phone'],
-            'type': 'mobile'
-        })
+        phones.append({'phone': row['mobile_phone'], 'type': 'mobile'})
     if 'fax' in row:
-        phones.append({
-            'phone': row['fax'],
-            'type': 'fax'
-        })
+        phones.append({'phone': row['fax'], 'type': 'fax'})
     if len(phones):
         contact['phones'] = phones
 
     emails = []
     if 'email' in row:
-        emails.append({
-            'email': row['email'],
-            'type': 'office'
-        })
+        emails.append({'email': row['email'], 'type': 'office'})
     if len(emails):
         contact['emails'] = emails
 
@@ -191,7 +209,9 @@ for i, row in enumerate(reader):
     elif lead['contacts'] not in unique_leads[grouper]['contacts']:
         unique_leads[grouper]['contacts'].extend(lead['contacts'])
 
-print(f'Found {len(unique_leads)} leads (grouped by company) from {import_count} contacts.')
+print(
+    f'Found {len(unique_leads)} leads (grouped by company) from {import_count} contacts.'
+)
 
 print('\nHere is a sample lead (last row):')
 print(json.dumps(unique_leads[grouper], indent=4))
@@ -204,7 +224,16 @@ if input('') != 'y':
 
 api = CloseIO_API(args.api_key)
 
-progress_widgets = ['Importing %d rows: ' % import_count, Percentage(), ' ', Bar(), ' ', ETA(), ' ', FileTransferSpeed()]
+progress_widgets = [
+    'Importing %d rows: ' % import_count,
+    Percentage(),
+    ' ',
+    Bar(),
+    ' ',
+    ETA(),
+    ' ',
+    FileTransferSpeed(),
+]
 pbar = ProgressBar(widgets=progress_widgets, maxval=import_count).start()
 
 dupes_cnt = 0
@@ -272,4 +301,3 @@ pbar.finish()
 print(f'Successful responses: {success_cnt} of {len(unique_leads)}')
 if args.skip_duplicates:
     print(f'Duplicates: {dupes_cnt}')
-
