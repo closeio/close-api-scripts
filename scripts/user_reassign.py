@@ -4,9 +4,11 @@
 import argparse
 import logging
 
-from closeio_api import Client as CloseIO_API, APIError
+from closeio_api import APIError, Client as CloseIO_API
 
-parser = argparse.ArgumentParser(description='Assigns tasks or opportunities from one user to another')
+parser = argparse.ArgumentParser(
+    description='Assigns tasks or opportunities from one user to another'
+)
 group_from = parser.add_mutually_exclusive_group(required=True)
 group_from.add_argument('--from-user-id', '-f', type=str, help='')
 group_from.add_argument('--from-user-email', type=str, help='')
@@ -15,20 +17,48 @@ group_to.add_argument('--to-user-id', '-t', type=str, help='')
 group_to.add_argument('--to-user-email', type=str, help='')
 
 parser.add_argument('--api-key', '-k', required=True, help='API key')
-parser.add_argument('--confirmed', '-c', action='store_true', help='Without this flag, the script will do a dry run without actually updating any data.')
-parser.add_argument('--continue-on-error', '-s', action='store_true', help='Do not abort after first error')
+parser.add_argument(
+    '--confirmed',
+    '-c',
+    action='store_true',
+    help='Without this flag, the script will do a dry run without actually updating any data.',
+)
+parser.add_argument(
+    '--continue-on-error',
+    '-s',
+    action='store_true',
+    help='Do not abort after first error',
+)
 group = parser.add_argument_group()
-group.add_argument('--tasks', '-T', action='store_true', help='reassign only non complete tasks')
-group.add_argument('--all-tasks', action='store_true', help='reassign all tasks')
-group.add_argument('--opportunities', '-O', action='store_true', help='reassign only active opportunities')
-group.add_argument('--all-opportunities', action='store_true', help='reassign all opportunities')
+group.add_argument(
+    '--tasks',
+    '-T',
+    action='store_true',
+    help='reassign only non complete tasks',
+)
+group.add_argument(
+    '--all-tasks', action='store_true', help='reassign all tasks'
+)
+group.add_argument(
+    '--opportunities',
+    '-O',
+    action='store_true',
+    help='reassign only active opportunities',
+)
+group.add_argument(
+    '--all-opportunities',
+    action='store_true',
+    help='reassign all opportunities',
+)
 
 args = parser.parse_args()
 
 full_tasks = []
 full_opps = []
 
-if not any([args.tasks, args.opportunities, args.all_tasks, args.all_opportunities]):
+if not any(
+    [args.tasks, args.opportunities, args.all_tasks, args.all_opportunities]
+):
     parser.error("at least one option required")
 
 log_format = "[%(asctime)s] %(levelname)s %(message)s"
@@ -56,9 +86,7 @@ if args.from_user_email:
     from_user_id = emails_to_ids[args.from_user_email]
 else:
     # for exception, if user_id is not present in the database
-    resp = api.get('user/' + args.from_user_id, params={
-        '_fields': 'id,email'
-    })
+    resp = api.get('user/' + args.from_user_id, params={'_fields': 'id,email'})
 
     from_user_id = resp['id']
     emails_to_ids[resp['email']] = resp['id']
@@ -67,9 +95,7 @@ if args.to_user_email:
     to_user_id = emails_to_ids[args.to_user_email]
 
 else:
-    resp = api.get('user/' + args.to_user_id, params={
-        '_fields': 'id,email'
-    })
+    resp = api.get('user/' + args.to_user_id, params={'_fields': 'id,email'})
 
     to_user_id = resp['id']
     emails_to_ids[resp['email']] = resp['id']
@@ -94,7 +120,7 @@ try:
                 'assigned_to': from_user_id,
                 '_order_by': 'date_created',
                 '_skip': offset,
-                '_fields': 'id'
+                '_fields': 'id',
             }
 
             if not args.all_tasks:
@@ -133,7 +159,7 @@ try:
                 'user_id': from_user_id,
                 '_order_by': 'date_created',
                 '_skip': offset,
-                '_fields': 'id'
+                '_fields': 'id',
             }
 
             if not args.all_opportunities:
@@ -160,10 +186,16 @@ try:
                 opportunities_errors += 1
                 if not args.continue_on_error:
                     raise e
-                logging.error(f'opportunity {opportunity["id"]} skipped with error {str(e)}')
+                logging.error(
+                    f'opportunity {opportunity["id"]} skipped with error {str(e)}'
+                )
 except APIError as e:
     logging.error(f'stopped on error {str(e)}')
 
-logging.info(f'summary: updated tasks {updated_tasks}, updated opportunities {updated_opportunities}')
+logging.info(
+    f'summary: updated tasks {updated_tasks}, updated opportunities {updated_opportunities}'
+)
 if opportunities_errors or tasks_errors:
-    logging.info(f'summary: tasks errors: {tasks_errors}, opportunities errors {opportunities_errors}')
+    logging.info(
+        f'summary: tasks errors: {tasks_errors}, opportunities errors {opportunities_errors}'
+    )

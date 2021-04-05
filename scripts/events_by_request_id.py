@@ -9,9 +9,15 @@ from closeio_api import Client as CloseIO_API
 
 parser = argparse.ArgumentParser(description='Get Events By Request ID')
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--request-id', '-r', required=True, help='request_id from event log.')
-parser.add_argument('--output', '-o', required=True, help='json output file of events')
-parser.add_argument('--verbose', '-v', action='store_true', help='Increase logging verbosity.')
+parser.add_argument(
+    '--request-id', '-r', required=True, help='request_id from event log.'
+)
+parser.add_argument(
+    '--output', '-o', required=True, help='json output file of events'
+)
+parser.add_argument(
+    '--verbose', '-v', action='store_true', help='Increase logging verbosity.'
+)
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
@@ -24,7 +30,9 @@ def setup_logger():
         logger.setLevel(logging.DEBUG)
 
     ch = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     return logger
@@ -39,7 +47,9 @@ has_more = True
 cursor = None
 first_iter = True
 while has_more:
-    resp = api.get('event', params={'_cursor': cursor, 'request_id': args.request_id})
+    resp = api.get(
+        'event', params={'_cursor': cursor, 'request_id': args.request_id}
+    )
     cursor = resp['cursor_next']
     has_more = bool(cursor)
 
