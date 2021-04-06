@@ -3,24 +3,65 @@ import csv
 
 from closeio_api import Client as CloseIO_API
 
-parser = argparse.ArgumentParser(description='Download a CSV of calls from/to a specific Close.io number over a specified time range')
+parser = argparse.ArgumentParser(
+    description='Download a CSV of calls from/to a specific Close.io number over a specified time range'
+)
 
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
-parser.add_argument('--direction', '-d', default=None, choices=['inbound', 'outbound'], help='Use this field to only export inbound calls or outbound calls. Leave this field blank to export both.')
-parser.add_argument('--missed-or-voicemail', '-m', action='store_true', help='Use this field to only export missed calls, voicemails, or calls of a duration 0')
-parser.add_argument('--end-date', '-e', help='The end of the date range you want to export call data for in yyyy-mm-dd format.')
-parser.add_argument('--start-date', '-s', help='The start of the date range you want to export call data for in yyyy-mm-dd format.')
-parser.add_argument('--phone-number', '-p', help='The phone number you\'d like to export the calls for in E164 international format. Example: +18552567346')
-parser.add_argument('--unattached-only', '-o', action='store_true', help='Use this field if you only want to find calls not attached to a lead')
-parser.add_argument('--user-id', '-u', help='Use this field if you only want to find calls for a specific user')
-parser.add_argument('--call-costs', '-c', action='store_true', help='Use this field if you want to include a call cost column in your export CSV')
+parser.add_argument(
+    '--direction',
+    '-d',
+    default=None,
+    choices=['inbound', 'outbound'],
+    help='Use this field to only export inbound calls or outbound calls. Leave this field blank to export both.',
+)
+parser.add_argument(
+    '--missed-or-voicemail',
+    '-m',
+    action='store_true',
+    help='Use this field to only export missed calls, voicemails, or calls of a duration 0',
+)
+parser.add_argument(
+    '--end-date',
+    '-e',
+    help='The end of the date range you want to export call data for in yyyy-mm-dd format.',
+)
+parser.add_argument(
+    '--start-date',
+    '-s',
+    help='The start of the date range you want to export call data for in yyyy-mm-dd format.',
+)
+parser.add_argument(
+    '--phone-number',
+    '-p',
+    help='The phone number you\'d like to export the calls for in E164 international format. Example: +18552567346',
+)
+parser.add_argument(
+    '--unattached-only',
+    '-o',
+    action='store_true',
+    help='Use this field if you only want to find calls not attached to a lead',
+)
+parser.add_argument(
+    '--user-id',
+    '-u',
+    help='Use this field if you only want to find calls for a specific user',
+)
+parser.add_argument(
+    '--call-costs',
+    '-c',
+    action='store_true',
+    help='Use this field if you want to include a call cost column in your export CSV',
+)
 
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
 
 org_id = api.get('api_key/' + args.api_key)['organization_id']
-org_name = api.get('organization/' + org_id, params={'_fields': 'name'})['name'].replace('/', "")
+org_name = api.get('organization/' + org_id, params={'_fields': 'name'})[
+    'name'
+].replace('/', "")
 
 params = {}
 has_more = True
@@ -47,7 +88,14 @@ if args.user_id:
 if not args.unattached_only:
     print("Getting Lead Display Names...")
     while has_more:
-        resp = api.get('lead', params={'_skip': offset, 'query': query, '_fields': 'id,display_name'})
+        resp = api.get(
+            'lead',
+            params={
+                '_skip': offset,
+                'query': query,
+                '_fields': 'id,display_name',
+            },
+        )
         for lead in resp['data']:
             display_names[lead['id']] = lead['display_name']
         print(offset)
@@ -56,7 +104,9 @@ if not args.unattached_only:
 
 has_more = True
 offset = 0
-params['_fields'] = 'id,user_id,duration,direction,date_created,remote_phone,local_phone,voicemail_url,recording_url,source,lead_id,updated_by_name'
+params[
+    '_fields'
+] = 'id,user_id,duration,direction,date_created,remote_phone,local_phone,voicemail_url,recording_url,source,lead_id,updated_by_name'
 
 if args.call_costs:
     params['_fields'] += ',cost'
@@ -88,7 +138,22 @@ if args.unattached_only:
 
 f = open(f'{org_name} Calls.csv', 'wt', encoding='utf-8')
 try:
-    keys = ['date_created', 'updated_by_name'] + [i for i in params['_fields'].split(',') if i not in ['date_created', 'updated_by_name', 'lead_id', 'cost', 'formatted_cost']] + ['lead_id', 'lead_name']
+    keys = (
+        ['date_created', 'updated_by_name']
+        + [
+            i
+            for i in params['_fields'].split(',')
+            if i
+            not in [
+                'date_created',
+                'updated_by_name',
+                'lead_id',
+                'cost',
+                'formatted_cost',
+            ]
+        ]
+        + ['lead_id', 'lead_name']
+    )
     if args.call_costs:
         keys += ['cost', 'formatted_cost']
     writer = csv.DictWriter(f, keys)
