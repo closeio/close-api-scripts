@@ -7,7 +7,9 @@ gevent.monkey.patch_all()
 from closeio_api import Client as CloseIO_API
 from gevent.pool import Pool
 
-parser = argparse.ArgumentParser(description='Download a CSV of email sequences and their subscription counts (number of active/paused/finished subscriptions)')
+parser = argparse.ArgumentParser(
+    description='Download a CSV of email sequences and their subscription counts (number of active/paused/finished subscriptions)'
+)
 
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
 args = parser.parse_args()
@@ -31,23 +33,28 @@ while has_more:
 
 print(f'Found {len(sequence_ids)} email sequences. Getting their details...')
 
-def fetch_sequence(sequence_id):
-    print(f'Getting details for {sequence_id}')
-    resp_sequence = api.get(f'sequence/{sequence_id}', params=params)
-    active_subscriptions = resp_sequence['subscription_counts_by_status']['active']
-    paused_subscriptions = resp_sequence['subscription_counts_by_status']['paused']
-    finished_subscriptions = resp_sequence['subscription_counts_by_status']['finished']
-    total_subscriptions = active_subscriptions + paused_subscriptions + finished_subscriptions
 
-    sequences.append({
-        'id': resp_sequence['id'],
-        'name': resp_sequence['name'],
-        'is_active': resp_sequence['status'] == 'active',
-        'total_subscriptions': total_subscriptions,
-        'active_subscriptions': active_subscriptions,
-        'paused_subscriptions': paused_subscriptions,
-        'finished_subscriptions': finished_subscriptions
-    })
+def fetch_sequence(sequence_id):
+    resp_sequence = api.get(f'sequence/{sequence_id}', params=params)
+    counts_by_status = resp_sequence['subscription_counts_by_status']
+    active_subscriptions = counts_by_status['active']
+    paused_subscriptions = counts_by_status['paused']
+    finished_subscriptions = counts_by_status['finished']
+    total_subscriptions = (
+        active_subscriptions + paused_subscriptions + finished_subscriptions
+    )
+
+    sequences.append(
+        {
+            'id': resp_sequence['id'],
+            'name': resp_sequence['name'],
+            'is_active': resp_sequence['status'] == 'active',
+            'total_subscriptions': total_subscriptions,
+            'active_subscriptions': active_subscriptions,
+            'paused_subscriptions': paused_subscriptions,
+            'finished_subscriptions': finished_subscriptions,
+        }
+    )
 
 
 sequences = []
@@ -55,12 +62,20 @@ sequences = []
 pool = Pool(5)
 pool.map(fetch_sequence, sequence_ids)
 
-file_name = f'{org_name} Email Sequences.csv'
+file_name = f'{org_name.replace("/", " ")} Email Sequences.csv'
 print(f'Exporting to `{file_name}`')
 
 f = open(file_name, 'wt', encoding='utf-8')
 try:
-    keys = ['id', 'name', 'is_active', 'total_subscriptions', 'active_subscriptions', 'paused_subscriptions', 'finished_subscriptions']
+    keys = [
+        'id',
+        'name',
+        'is_active',
+        'total_subscriptions',
+        'active_subscriptions',
+        'paused_subscriptions',
+        'finished_subscriptions',
+    ]
     writer = csv.DictWriter(f, keys)
     writer.writeheader()
     writer.writerows(sequences)
