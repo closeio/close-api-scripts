@@ -246,6 +246,9 @@ for lead in leads:
 
     if args.field == 'custom':
         custom_field_value = lead['custom'].get(args.custom_field_name)
+        if isinstance(custom_field_value, list):
+            custom_field_value = ','.join(custom_field_value)
+
         if custom_field_value:
             if (
                 custom_fields.get(custom_field_value)
