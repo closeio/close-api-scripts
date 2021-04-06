@@ -35,8 +35,9 @@ print(f'Found {len(sequence_ids)} email sequences. Getting their details...')
 
 
 def fetch_sequence(sequence_id):
-    resp_sequence = api.get(f'sequence/{sequence_id}', params=params)
-    counts_by_status = resp_sequence['subscription_counts_by_status']
+    resp = api.get(f'sequence/{sequence_id}')
+
+    counts_by_status = resp['subscription_counts_by_status']
     active_subscriptions = counts_by_status['active']
     paused_subscriptions = counts_by_status['paused']
     finished_subscriptions = counts_by_status['finished']
@@ -46,9 +47,9 @@ def fetch_sequence(sequence_id):
 
     sequences.append(
         {
-            'id': resp_sequence['id'],
-            'name': resp_sequence['name'],
-            'is_active': resp_sequence['status'] == 'active',
+            'id': resp['id'],
+            'name': resp['name'],
+            'is_active': resp['status'] == 'active',
             'total_subscriptions': total_subscriptions,
             'active_subscriptions': active_subscriptions,
             'paused_subscriptions': paused_subscriptions,
