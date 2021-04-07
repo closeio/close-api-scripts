@@ -421,4 +421,4 @@ if args.custom_activities or args.all:
                 source_field["custom_activity_type_id"] = new_activity_type[
                     "id"
                 ]
-                to_api.post("custom_field/activity/", source_field)
+                to_api.post("custom_field/activity/", data=source_field)
