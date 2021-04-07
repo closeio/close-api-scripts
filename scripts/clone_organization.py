@@ -300,3 +300,125 @@ if args.sequences or args.all:
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
+
+if args.custom_activities or args.all:
+    print("\nCopying Custom Activities")
+
+    # Fetch both shared and non-shared activity custom fields
+    source_custom_fields = []
+
+    has_more = True
+    offset = 0
+    while has_more:
+        resp = from_api.get("custom_field/activity", params={"_skip": offset})
+        source_custom_fields.extend(resp['data'])
+        offset += len(resp["data"])
+        has_more = resp["has_more"]
+    has_more = True
+    offset = 0
+    while has_more:
+        resp = from_api.get("custom_field/shared", params={"_skip": offset})
+        source_custom_fields.extend(resp['data'])
+        offset += len(resp["data"])
+        has_more = resp["has_more"]
+
+    # Get the existing shared custom fields in case the new org already has them
+    existing_shared_custom_fields = []
+    has_more = True
+    offset = 0
+    while has_more:
+        resp = to_api.get("custom_field/shared", params={"_skip": offset})
+        existing_shared_custom_fields.extend(resp['data'])
+        offset += len(resp["data"])
+        has_more = resp["has_more"]
+
+    custom_activities = from_api.get("custom_activity")["data"]
+    for activity_type in custom_activities:
+        # Create the activity type first, then add the fields to it below
+        del activity_type["organization_id"]
+
+        try:
+            new_activity_type = to_api.post(
+                "custom_activity", data=activity_type
+            )
+            print(f"Added `{activity_type['name']}` custom activity")
+        except APIError as e:
+            print(
+                f"Couldn't add `{activity_type['name']}` custom activity because {str(e)}"
+            )
+            continue
+
+        for source_field in activity_type["fields"]:
+            # Get the whole object because e.g. `choices` aren't exposed in activity type `fields` array
+            source_field = next(
+                iter(
+                    [
+                        x
+                        for x in source_custom_fields
+                        if x["id"] == source_field["id"]
+                    ]
+                ),
+                None,
+            )
+            source_field.pop('organization_id', None)
+
+            if source_field["is_shared"]:
+                destination_field = next(
+                    iter(
+                        [
+                            x
+                            for x in existing_shared_custom_fields
+                            if x['name'] == source_field['name']
+                        ]
+                    ),
+                    None,
+                )
+
+                if destination_field:
+                    new_cf = destination_field
+                else:
+                    # Create new shared field because it doesn't exist yet
+                    try:
+                        # Exclude `associations` field as that references old (source) activities
+                        source_field_data = {
+                            k: v
+                            for k, v in source_field.items()
+                            if k != 'associations'
+                        }
+                        new_cf = to_api.post(
+                            f"custom_field/shared/",
+                            data=source_field_data,
+                        )
+                        existing_shared_custom_fields.append(new_cf)
+                        print(f"Added `{source_field['name']}` shared field")
+                    except APIError as e:
+                        print(
+                            f"Couldn't add `{source_field['name']}` shared field because {str(e)}"
+                        )
+                        continue
+
+                association = next(
+                    iter(
+                        [
+                            x
+                            for x in source_field["associations"]
+                            if x['custom_activity_type_id']
+                            == activity_type['id']
+                        ]
+                    )
+                )
+                is_required = association['required']
+
+                to_api.post(
+                    f"custom_field/shared/{new_cf['id']}/custom_activity_type",
+                    data={
+                        "custom_activity_type_id": new_activity_type["id"],
+                        "required": association['required'],
+                    },
+                )
+            else:
+                # Non-shared (regular) field, just create it
+                source_field["custom_activity_type_id"] = new_activity_type[
+                    "id"
+                ]
+                to_api.post("custom_field/activity/", source_field)
