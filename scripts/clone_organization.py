@@ -1,5 +1,4 @@
 import argparse
-import csv
 
 from closeio_api import APIError, Client as CloseIO_API
 
@@ -79,22 +78,8 @@ print(
 )
 
 
-def write_results_to_csv(csv_data, objects, keys):
-    f = open(
-        f'{to_organization["name"]} {objects}.csv', 'wt', encoding='utf-8'
-    )
-    try:
-        writer = csv.DictWriter(f, keys)
-        writer.writeheader()
-        writer.writerows(csv_data)
-    finally:
-        f.close()
-
-
 if args.lead_statuses or args.all:
-    print("Copying Lead Statuses")
-    csv_data = []
-
+    print("\nCopying Lead Statuses")
     lead_status_list = from_api.get(
         f"organization/{from_organization['id']}",
         params={"_fields": "lead_statuses"},
@@ -103,20 +88,15 @@ if args.lead_statuses or args.all:
     for index, status in enumerate(lead_status_list):
         del status["id"]
 
-        error = ''
         try:
             to_api.post("status/lead", data=status)
+            print(f'Added `{status["label"]}`')
         except APIError as e:
-            error = str(e)
+            print(f"Couldn't add `{status['label']}` because {str(e)}")
 
-        csv_data.append({'name': status['label'], 'error': error})
-
-    write_results_to_csv(csv_data, 'Lead Statuses', ['name', 'error'])
 
 if args.opportunity_statuses or args.all:
-    print("Copying Opportunity Statuses")
-    csv_data = []
-
+    print("\nCopying Opportunity Statuses")
     to_pipelines = to_api.get("pipeline")["data"]
 
     from_pipelines = from_api.get(
@@ -140,14 +120,10 @@ if args.opportunity_statuses or args.all:
 
             try:
                 new_pipeline = to_api.post("pipeline", data=from_pipeline)
+                print(f'Added `{from_pipeline["name"]}` and its statuses')
             except APIError as e:
-                error = str(e)
-                csv_data.append(
-                    {
-                        'pipeline_name': from_pipeline['name'],
-                        'status_name': '',
-                        'error': error,
-                    }
+                print(
+                    f"Couldn't add `{from_pipeline['name']}` because {str(e)}"
                 )
                 continue
         else:
@@ -156,30 +132,16 @@ if args.opportunity_statuses or args.all:
                 opp_status["pipeline_id"] = new_pipeline["id"]
                 del opp_status["id"]
 
-                error = ''
                 try:
                     to_api.post("status/opportunity", data=opp_status)
+                    print(f'Added `{opp_status["label"]}`')
                 except APIError as e:
-                    error = str(e)
-
-                csv_data.append(
-                    {
-                        'pipeline_name': from_pipeline['name'],
-                        'status_name': opp_status['label'],
-                        'error': error,
-                    }
-                )
-
-    write_results_to_csv(
-        csv_data,
-        'Opportunity Statuses',
-        ['pipeline_name', 'status_name', 'error'],
-    )
+                    print(
+                        f"Couldn't add `{opp_status['label']}` because {str(e)}"
+                    )
 
 
 def copy_custom_fields(custom_field_type):
-    csv_data = []
-
     has_more = True
     offset = 0
     while has_more:
@@ -190,36 +152,26 @@ def copy_custom_fields(custom_field_type):
             del custom["id"]
             del custom["organization_id"]
 
-            error = ''
             try:
                 to_api.post(f"custom_fields/{custom_field_type}", data=custom)
+                print(f'Added `{custom["name"]}`')
             except APIError as e:
-                error = str(e)
-
-            csv_data.append({'name': custom['name'], 'error': error})
+                print(f"Couldn't add `{custom['name']}` because {str(e)}")
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
 
-    write_results_to_csv(
-        csv_data,
-        f'{custom_field_type.title()} Custom Fields',
-        ['name', 'error'],
-    )
-
 
 if args.lead_custom_fields or args.all:
-    print("Copying Lead Custom Fields")
+    print("\nCopying Lead Custom Fields")
     copy_custom_fields('lead')
 
 if args.contact_custom_fields or args.all:
-    print("Copying Contact Custom Fields")
+    print("\nCopying Contact Custom Fields")
     copy_custom_fields('contact')
 
 if args.integration_links or args.all:
-    print("Copying Integration Links")
-    csv_data = []
-
+    print("\nCopying Integration Links")
     has_more = True
     offset = 0
     while has_more:
@@ -228,27 +180,17 @@ if args.integration_links or args.all:
             del link["id"]
             del link["organization_id"]
 
-            error = ''
             try:
                 to_api.post("integration_link", data=link)
+                print(f'Added `{link["name"]}`')
             except APIError as e:
-                error = str(e)
-
-            csv_data.append({'name': link['name'], 'error': error})
+                print(f"Couldn't add `{link['name']}` because {str(e)}")
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
 
-    write_results_to_csv(
-        csv_data,
-        'Integration Links',
-        ['name', 'error'],
-    )
-
 if args.smart_views or args.all:
-    print("Copying Smart Views")
-    csv_data = []
-
+    print("\nCopying Smart Views")
     has_more = True
     offset = 0
     while has_more:
@@ -260,25 +202,14 @@ if args.smart_views or args.all:
             error = ''
             try:
                 to_api.post("saved_search", data=saved_search)
+                print(f'Added `{saved_search["name"]}`')
             except APIError as e:
-                error = str(e)
-
-            csv_data.append(
-                {
-                    'name': saved_search['name'],
-                    'query': saved_search['query'],
-                    'error': error,
-                }
-            )
+                print(
+                    f"Couldn't add `{saved_search['name']}` because {str(e)}"
+                )
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
-
-    write_results_to_csv(
-        csv_data,
-        'Smart Views',
-        ['name', 'error'],
-    )
 
 if args.roles or args.all:
     BUILT_IN_ROLES = [
@@ -288,9 +219,7 @@ if args.roles or args.all:
         "User",
     ]
 
-    print("Copying Roles")
-    csv_data = []
-
+    print("\nCopying Roles")
     has_more = True
     offset = 0
     while has_more:
@@ -302,58 +231,37 @@ if args.roles or args.all:
             del role["id"]
             del role["organization_id"]
 
-            error = ''
             try:
                 to_api.post("role", data=role)
+                print(f'Added `{role["name"]}`')
             except APIError as e:
-                error = str(e)
-
-            csv_data.append({'name': role['name'], 'error': error})
+                print(f"Couldn't add `{role['name']}` because {str(e)}")
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
 
-    write_results_to_csv(
-        csv_data,
-        'Roles',
-        ['name', 'error'],
-    )
-
 if args.templates or args.all:
-    print("Copying Templates")
-    csv_data = []
-
+    print("\nCopying Templates")
     has_more = True
     offset = 0
     while has_more:
         resp = from_api.get("email_template", params={"_skip": offset})
-        for source_step_template in resp["data"]:
-            del source_step_template["id"]
-            del source_step_template["organization_id"]
+        for template in resp["data"]:
+            del template["id"]
+            del template["organization_id"]
 
-            error = ''
             try:
-                to_api.post("email_template", data=source_step_template)
+                to_api.post("email_template", data=template)
+                print(f'Added `{template["name"]}`')
             except APIError as e:
-                error = str(e)
-
-            csv_data.append(
-                {'name': source_step_template['name'], 'error': error}
-            )
+                print(f"Couldn't add `{template['name']}` because {str(e)}")
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
 
-    write_results_to_csv(
-        csv_data,
-        'Email Templates',
-        ['name', 'error'],
-    )
-
 # Assumes all the sequence steps (templates) were already transferred over
 if args.sequences or args.all:
-    print("Copying Sequences")
-    csv_data = []
+    print("\nCopying Sequences")
 
     to_templates = []
     has_more = True
@@ -373,30 +281,22 @@ if args.sequences or args.all:
             del sequence["organization_id"]
             for step in sequence["steps"]:
                 del step["id"]
-                source_step_template = from_api.get(
+                template = from_api.get(
                     f"email_template/{step['email_template_id']}",
                     params={'_fields': 'name'},
                 )
                 for template in to_templates:
                     if (
-                        source_step_template["name"] == template["name"]
+                        template["name"] == template["name"]
                         and template["is_shared"]
                     ):
                         step["email_template_id"] = template["id"]
 
-            error = ''
             try:
                 to_api.post("sequence", data=sequence)
+                print(f'Added `{sequence["name"]}`')
             except APIError as e:
-                error = str(e)
-
-            csv_data.append({'name': sequence['name'], 'error': error})
+                print(f"Couldn't add `{sequence['name']}` because {str(e)}")
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
-
-    write_results_to_csv(
-        csv_data,
-        'Email Sequences',
-        ['name', 'error'],
-    )
