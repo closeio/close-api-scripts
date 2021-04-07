@@ -348,27 +348,23 @@ if args.custom_activities or args.all:
             )
             continue
 
-        for source_field in activity_type["fields"]:
-            # Get the whole object because e.g. `choices` aren't exposed in activity type `fields` array
+        for field in activity_type["fields"]:
+            # Get the object directly because some fields like `choices` aren't exposed in activity type `fields` array
             source_field = next(
                 iter(
-                    [
-                        x
-                        for x in source_custom_fields
-                        if x["id"] == source_field["id"]
-                    ]
+                    [x for x in source_custom_fields if x["id"] == field["id"]]
                 ),
                 None,
             )
             source_field.pop('organization_id', None)
 
-            if source_field["is_shared"]:
+            if field["is_shared"]:
                 destination_field = next(
                     iter(
                         [
                             x
                             for x in existing_shared_custom_fields
-                            if x['name'] == source_field['name']
+                            if x['name'] == field['name']
                         ]
                     ),
                     None,
@@ -379,41 +375,26 @@ if args.custom_activities or args.all:
                 else:
                     # Create new shared field because it doesn't exist yet
                     try:
-                        # Exclude `associations` field as that references old (source) activities
-                        source_field_data = {
-                            k: v
-                            for k, v in source_field.items()
-                            if k != 'associations'
-                        }
+                        # Delete `associations` field as that references old (source) activities
+                        del source_field['associations']
+
                         new_cf = to_api.post(
                             f"custom_field/shared/",
-                            data=source_field_data,
+                            data=source_field,
                         )
                         existing_shared_custom_fields.append(new_cf)
-                        print(f"Added `{source_field['name']}` shared field")
+                        print(f"Added `{field['name']}` shared field")
                     except APIError as e:
                         print(
-                            f"Couldn't add `{source_field['name']}` shared field because {str(e)}"
+                            f"Couldn't add `{field['name']}` shared field because {str(e)}"
                         )
                         continue
-
-                association = next(
-                    iter(
-                        [
-                            x
-                            for x in source_field["associations"]
-                            if x['custom_activity_type_id']
-                            == activity_type['id']
-                        ]
-                    )
-                )
-                is_required = association['required']
 
                 to_api.post(
                     f"custom_field/shared/{new_cf['id']}/custom_activity_type",
                     data={
                         "custom_activity_type_id": new_activity_type["id"],
-                        "required": association['required'],
+                        "required": field['required'],
                     },
                 )
             else:
