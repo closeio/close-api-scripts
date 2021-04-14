@@ -198,6 +198,7 @@ if args.smart_views or args.all:
         for saved_search in resp["data"]:
             del saved_search["id"]
             del saved_search["organization_id"]
+            del saved_search["user_id"]
 
             error = ''
             try:
