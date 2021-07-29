@@ -1,7 +1,5 @@
 import argparse
 
-import argparse
-
 from closeio_api import APIError, Client as CloseIO_API
 
 arg_parser = argparse.ArgumentParser(
