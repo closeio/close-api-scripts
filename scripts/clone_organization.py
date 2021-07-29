@@ -1,16 +1,20 @@
 import argparse
 
+import argparse
+
 from closeio_api import APIError, Client as CloseIO_API
 
 arg_parser = argparse.ArgumentParser(
     description="Clone one organization to another"
 )
+
 arg_parser.add_argument(
     "--from-api-key",
     "-f",
     required=True,
     help="API Key for source organization",
 )
+
 arg_parser.add_argument(
     "--to-api-key",
     "-t",
@@ -23,6 +27,7 @@ arg_parser.add_argument(
     action="store_true",
     help="Copy lead statuses",
 )
+
 arg_parser.add_argument(
     "--opportunity-statuses",
     action="store_true",
@@ -34,6 +39,19 @@ arg_parser.add_argument(
     action="store_true",
     help="Copy lead custom fields",
 )
+
+arg_parser.add_argument(
+    "--opp-custom-fields",
+    action="store_true",
+    help="Copy opportunity custom fields",
+)
+
+arg_parser.add_argument(
+    "--shared-custom-fields",
+    action="store_true",
+    help="Copy shared custom fields",
+)
+
 arg_parser.add_argument(
     "--contact-custom-fields",
     action="store_true",
@@ -49,12 +67,15 @@ arg_parser.add_argument(
 arg_parser.add_argument(
     "--smart-views", action="store_true", help="Copy smart views"
 )
+
 arg_parser.add_argument(
     "--templates", action="store_true", help="Copy templates"
 )
+
 arg_parser.add_argument(
     "--sequences", action="store_true", help="Copy sequences"
 )
+
 arg_parser.add_argument(
     "--integration-links",
     action="store_true",
@@ -65,6 +86,7 @@ arg_parser.add_argument("--roles", action="store_true", help="Copy roles")
 arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
 )
+
 args = arg_parser.parse_args()
 
 from_api = CloseIO_API(args.from_api_key)
@@ -93,7 +115,6 @@ if args.lead_statuses or args.all:
             print(f'Added `{status["label"]}`')
         except APIError as e:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
-
 
 if args.opportunity_statuses or args.all:
     print("\nCopying Opportunity Statuses")
@@ -146,14 +167,14 @@ def copy_custom_fields(custom_field_type):
     offset = 0
     while has_more:
         resp = from_api.get(
-            f"custom_fields/{custom_field_type}", params={"_skip": offset}
+            f"custom_field/{custom_field_type}", params={"_skip": offset}
         )
         for custom in resp["data"]:
             del custom["id"]
             del custom["organization_id"]
 
             try:
-                to_api.post(f"custom_fields/{custom_field_type}", data=custom)
+                to_api.post(f"custom_field/{custom_field_type}", data=custom)
                 print(f'Added `{custom["name"]}`')
             except APIError as e:
                 print(f"Couldn't add `{custom['name']}` because {str(e)}")
@@ -165,6 +186,14 @@ def copy_custom_fields(custom_field_type):
 if args.lead_custom_fields or args.all:
     print("\nCopying Lead Custom Fields")
     copy_custom_fields('lead')
+
+if args.opp_custom_fields or args.all:
+    print("\nCopying Opportunity Custom Fields")
+    copy_custom_fields('opportunity')
+
+if args.shared_custom_fields or args.all:
+    print("\nCopying Shared Custom Fields")
+    copy_custom_fields('shared')
 
 if args.contact_custom_fields or args.all:
     print("\nCopying Contact Custom Fields")
@@ -282,13 +311,13 @@ if args.sequences or args.all:
             del sequence["organization_id"]
             for step in sequence["steps"]:
                 del step["id"]
-                template = from_api.get(
+                from_template = from_api.get(
                     f"email_template/{step['email_template_id']}",
                     params={'_fields': 'name'},
                 )
                 for template in to_templates:
                     if (
-                        template["name"] == template["name"]
+                        template["name"] == from_template["name"]
                         and template["is_shared"]
                     ):
                         step["email_template_id"] = template["id"]
