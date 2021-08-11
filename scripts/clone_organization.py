@@ -419,10 +419,11 @@ if args.custom_activities or args.all:
                         continue
 
                 to_api.post(
-                    f"custom_field/shared/{new_cf['id']}/custom_activity_type",
+                    f"custom_field/shared/{new_cf['id']}/association",
                     data={
+                        'object_type':'custom_activity_type',
                         "custom_activity_type_id": new_activity_type["id"],
-                        "required": field['required'],
+                        "required": field['required']
                     },
                 )
             else:
