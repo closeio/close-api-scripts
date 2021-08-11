@@ -172,8 +172,12 @@ def copy_custom_fields(custom_field_type):
             del custom["organization_id"]
 
             try:
-                to_api.post(f"custom_field/{custom_field_type}", data=custom)
+                new_custom=to_api.post(f"custom_field/{custom_field_type}", data=custom)
                 print(f'Added `{custom["name"]}`')
+                if custom_field_type=='shared':
+                    for association in custom['associations']:
+                        if association['object_type']=='lead' or association['object_type']=='opportunity' or association['object_type']=='contact':
+                            to_api.post(f"custom_field/shared/{new_custom['id']}/association",data={'object_type':association['object_type']})
             except APIError as e:
                 print(f"Couldn't add `{custom['name']}` because {str(e)}")
 
