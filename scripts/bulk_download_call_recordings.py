@@ -152,7 +152,8 @@ downloaded_calls = sorted(
 # Write Filename Output to CSV
 f = open(
     f'{args.file_path}/{org_name} Downloaded Call Recordings from {args.date_start} to {args.date_end} Reference.csv',
-    'wt',
+    'w',
+    newline='',
     encoding='utf-8',
 )
 try:
