@@ -107,7 +107,7 @@ pool.map(getSourceLeadData, events)
 
 # Write data to a CSV
 f = open(
-    f'{org_name} Merge Lead Events in Last 30 Days.csv', 'wt', encoding='utf-8'
+    f'{org_name} Merge Lead Events in Last 30 Days.csv', 'w', newline='', encoding='utf-8'
 )
 try:
     ordered_keys = [
