@@ -66,7 +66,7 @@ pool.map(fetch_sequence, sequence_ids)
 file_name = f'{org_name.replace("/", " ")} Email Sequences.csv'
 print(f'Exporting to `{file_name}`')
 
-f = open(file_name, 'wt', encoding='utf-8')
+f = open(file_name, 'w', newline='', encoding='utf-8')
 try:
     keys = [
         'id',
