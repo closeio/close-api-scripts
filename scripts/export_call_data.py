@@ -136,7 +136,7 @@ if args.phone_number:
 if args.unattached_only:
     calls = [i for i in calls if i['lead_id'] == None]
 
-f = open(f'{org_name} Calls.csv', 'wt', encoding='utf-8')
+f = open(f'{org_name} Calls.csv', 'w', newline='', encoding='utf-8')
 try:
     keys = (
         ['date_created', 'updated_by_name']
