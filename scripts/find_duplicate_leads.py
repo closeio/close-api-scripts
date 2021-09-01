@@ -58,7 +58,8 @@ def write_to_csv_file(type_name, items, ordered_keys):
     print("Writing data to CSV...")
     f = open(
         f'{org_name.replace("/", " ")} {type_name} Duplicates.csv',
-        'wt',
+        'w',
+        newline='',
         encoding='utf-8',
     )
     try:
