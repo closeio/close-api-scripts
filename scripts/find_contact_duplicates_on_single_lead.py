@@ -46,7 +46,8 @@ def writeCSV(type_name, items, ordered_keys):
     print(f"Writing {type_name} data to CSV...")
     f = open(
         f'{org_name} {type_name} Duplicates on a Single Lead.csv',
-        'wt',
+        'w',
+        newline='',
         encoding='utf-8',
     )
     try:
