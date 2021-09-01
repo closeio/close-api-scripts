@@ -270,7 +270,8 @@ if args.org_count:
 
 f = open(
     f'{org_name} Time to Respond Data Per User For The Past {args.past_days} days.csv',
-    'wt',
+    'w',
+    newline='',
     encoding='utf-8',
 )
 try:
