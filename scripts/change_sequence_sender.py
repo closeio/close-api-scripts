@@ -44,10 +44,7 @@ offset = 0
 while has_more:
     resp = api.get(
         'sequence',
-        params={
-            '_skip': offset,
-            'fields': 'id,name',
-        },
+        params={'_skip': offset},
     )
     sequences.extend(resp['data'])
     offset += len(resp['data'])
@@ -60,17 +57,13 @@ for sequence in sequences:
     while has_more:
         sub_results = api.get(
             'sequence_subscription',
-            params={
-                '_skip': offset,
-                'sequence_id': sequence['id'],
-                'fields': 'id,sender_email,sender_name,sender_account_id,status',
-            },
+            params={'_skip': offset, 'sequence_id': sequence['id']},
         )
         from_subs += [
             i
             for i in sub_results['data']
             if i['sender_email'] == args.from_email
-            and i['status'] in ['active', 'paused', 'error']
+            and i['status'] in ['active', 'paused', 'error', 'goal']
         ]
         offset += len(sub_results['data'])
         has_more = sub_results['has_more']
