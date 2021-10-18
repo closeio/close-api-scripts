@@ -35,38 +35,48 @@ parser.add_argument(
 args = parser.parse_args()
 api = CloseIO_API(args.api_key)
 
+from_subs = []
+
+print("Getting sequences")
+sequences = []
 has_more = True
 offset = 0
-from_subs = []
-count = 0
-
-print("Getting sequence subscriptions")
-
 while has_more:
-    sub_results = api.get(
-        'sequence_subscription',
-        params={
-            '_skip': offset,
-            'fields': 'id,sender_email,sender_name,sender_account_id,status',
-        },
+    resp = api.get(
+        'sequence',
+        params={'_skip': offset},
     )
-    from_subs += [
-        i
-        for i in sub_results['data']
-        if i['sender_email'] == args.from_email
-        and i['status'] in ['active', 'paused']
-    ]
-    offset += len(sub_results['data'])
-    print(offset)
-    has_more = sub_results['has_more']
+    sequences.extend(resp['data'])
+    offset += len(resp['data'])
+    has_more = resp['has_more']
+
+for sequence in sequences:
+    print(f"Getting sequence subscriptions for `{sequence['name']}`")
+    has_more = True
+    offset = 0
+    while has_more:
+        sub_results = api.get(
+            'sequence_subscription',
+            params={'_skip': offset, 'sequence_id': sequence['id']},
+        )
+        from_subs += [
+            i
+            for i in sub_results['data']
+            if i['sender_email'] == args.from_email
+            and i['status'] in ['active', 'paused', 'error', 'goal']
+        ]
+        offset += len(sub_results['data'])
+        has_more = sub_results['has_more']
+        print(offset)
 
 print(f"Total subscriptions: {len(from_subs)}")
 print("Updating subscriptions")
 
+count = 0
 for sub in from_subs:
     try:
         api.put(
-            'sequence_subscription/' + sub['id'],
+            f"sequence_subscription/{sub['id']}",
             data={
                 'sender_name': args.sender_name,
                 'sender_account_id': args.sender_account_id,
