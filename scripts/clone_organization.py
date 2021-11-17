@@ -5,14 +5,12 @@ from closeio_api import APIError, Client as CloseIO_API
 arg_parser = argparse.ArgumentParser(
     description="Clone one organization to another"
 )
-
 arg_parser.add_argument(
     "--from-api-key",
     "-f",
     required=True,
     help="API Key for source organization",
 )
-
 arg_parser.add_argument(
     "--to-api-key",
     "-t",
@@ -25,7 +23,6 @@ arg_parser.add_argument(
     action="store_true",
     help="Copy lead statuses",
 )
-
 arg_parser.add_argument(
     "--opportunity-statuses",
     action="store_true",
@@ -65,15 +62,12 @@ arg_parser.add_argument(
 arg_parser.add_argument(
     "--smart-views", action="store_true", help="Copy smart views"
 )
-
 arg_parser.add_argument(
     "--templates", action="store_true", help="Copy templates"
 )
-
 arg_parser.add_argument(
     "--sequences", action="store_true", help="Copy sequences"
 )
-
 arg_parser.add_argument(
     "--integration-links",
     action="store_true",
@@ -84,7 +78,6 @@ arg_parser.add_argument("--roles", action="store_true", help="Copy roles")
 arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
 )
-
 args = arg_parser.parse_args()
 
 from_api = CloseIO_API(args.from_api_key)
@@ -113,6 +106,7 @@ if args.lead_statuses or args.all:
             print(f'Added `{status["label"]}`')
         except APIError as e:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
+
 
 if args.opportunity_statuses or args.all:
     print("\nCopying Opportunity Statuses")
@@ -159,20 +153,22 @@ if args.opportunity_statuses or args.all:
                         f"Couldn't add `{opp_status['label']}` because {str(e)}"
                     )
 
-
+custom_id_mapping={}
 def copy_custom_fields(custom_field_type):
     has_more = True
     offset = 0
+    
     while has_more:
         resp = from_api.get(
             f"custom_field/{custom_field_type}", params={"_skip": offset}
         )
         for custom in resp["data"]:
+            old_custom_id=custom['id']
             del custom["id"]
             del custom["organization_id"]
-
             try:
                 new_custom=to_api.post(f"custom_field/{custom_field_type}", data=custom)
+                custom_id_mapping[old_custom_id]=new_custom['id']
                 print(f'Added `{custom["name"]}`')
                 if custom_field_type=='shared':
                     for association in custom['associations']:
@@ -181,9 +177,21 @@ def copy_custom_fields(custom_field_type):
             except APIError as e:
                 print(f"Couldn't add `{custom['name']}` because {str(e)}")
 
+
         offset += len(resp["data"])
         has_more = resp["has_more"]
+    
+    if custom_field_type!='shared':
+        from_schema=from_api.get(f'custom_field_schema/{custom_field_type}')
+        to_schema=[]
+        for field in from_schema["fields"]:
+            to_schema.append({'id':custom_id_mapping[field['id']]})
+        to_api.put(f'custom_field_schema/{custom_field_type}',data={'fields':to_schema})
 
+
+if args.shared_custom_fields or args.all:
+    print("\nCopying Shared Custom Fields")
+    copy_custom_fields('shared')
 
 if args.lead_custom_fields or args.all:
     print("\nCopying Lead Custom Fields")
@@ -192,10 +200,6 @@ if args.lead_custom_fields or args.all:
 if args.opp_custom_fields or args.all:
     print("\nCopying Opportunity Custom Fields")
     copy_custom_fields('opportunity')
-
-if args.shared_custom_fields or args.all:
-    print("\nCopying Shared Custom Fields")
-    copy_custom_fields('shared')
 
 if args.contact_custom_fields or args.all:
     print("\nCopying Contact Custom Fields")
@@ -224,24 +228,27 @@ if args.smart_views or args.all:
     print("\nCopying Smart Views")
     has_more = True
     offset = 0
+    saved_search_array = []
     while has_more:
         resp = from_api.get("saved_search", params={"_skip": offset})
         for saved_search in resp["data"]:
             del saved_search["id"]
             del saved_search["organization_id"]
             del saved_search["user_id"]
-
-            error = ''
-            try:
-                to_api.post("saved_search", data=saved_search)
-                print(f'Added `{saved_search["name"]}`')
-            except APIError as e:
-                print(
-                    f"Couldn't add `{saved_search['name']}` because {str(e)}"
-                )
-
+            saved_search_array.append(saved_search)
         offset += len(resp["data"])
         has_more = resp["has_more"]
+    
+    reverse = list(reversed(saved_search_array))
+    for saved_search in reverse:
+        error = ''
+        try:
+            to_api.post("saved_search", data=saved_search)
+            print(f'Added `{saved_search["name"]}`')
+        except APIError as e:
+            print(
+                f"Couldn't add `{saved_search['name']}` because {str(e)}"
+            )
 
 if args.roles or args.all:
     BUILT_IN_ROLES = [
@@ -428,7 +435,7 @@ if args.custom_activities or args.all:
                         'object_type':'custom_activity_type',
                         "custom_activity_type_id": new_activity_type["id"],
                         "required": field['required']
-                    },
+                    }
                 )
             else:
                 # Non-shared (regular) field, just create it
