@@ -1,16 +1,16 @@
-import argparse
-import base64
-import csv
-from datetime import datetime
-from operator import itemgetter
-
+import gevent
 import gevent.monkey
-import requests
-from closeio_api import Client as CloseIO_API
-from dateutil.relativedelta import relativedelta
 from gevent.pool import Pool
-
 gevent.monkey.patch_all()
+
+import argparse
+from closeio_api import Client as CloseIO_API, APIError
+from dateutil.relativedelta import relativedelta
+from datetime import datetime, timedelta
+import base64
+import requests
+from operator import itemgetter
+import csv
 
 parser = argparse.ArgumentParser(
     description='Bulk Download Close.io Call Recordings into a specified Folder'
