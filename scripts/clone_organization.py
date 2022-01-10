@@ -155,6 +155,29 @@ if args.opportunity_statuses or args.all:
 
 custom_id_mapping={}
 def copy_custom_fields(custom_field_type):
+    to_custom_fields=[]
+    has_more = True
+    offset = 0
+    while has_more:
+        resp = to_api.get(f"custom_field/{custom_field_type}", params={"_skip": offset})
+        for custom in resp['data']:
+            to_custom_fields.append(custom)
+        offset += len(resp["data"])
+        has_more = resp["has_more"]
+
+    has_more = True
+    offset = 0
+    while has_more:
+        resp = to_api.get(f"custom_field/shared", params={"_skip": offset})
+        for custom in resp['data']:
+            for association in custom['associations']:
+                if association['object_type']==custom_field_type:
+                    to_custom_fields.append(custom)
+        offset += len(resp["data"])
+        has_more = resp["has_more"]
+                    
+
+
     has_more = True
     offset = 0
     
@@ -164,6 +187,7 @@ def copy_custom_fields(custom_field_type):
         )
         for custom in resp["data"]:
             old_custom_id=custom['id']
+            old_custom_name=custom['name']
             del custom["id"]
             del custom["organization_id"]
             try:
@@ -176,7 +200,9 @@ def copy_custom_fields(custom_field_type):
                             to_api.post(f"custom_field/shared/{new_custom['id']}/association",data={'object_type':association['object_type']})
             except APIError as e:
                 print(f"Couldn't add `{custom['name']}` because {str(e)}")
-
+                for custom2 in to_custom_fields:
+                    if custom2['name']==old_custom_name:
+                        custom_id_mapping[old_custom_id]=custom2['id']
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
@@ -186,7 +212,8 @@ def copy_custom_fields(custom_field_type):
         to_schema=[]
         for field in from_schema["fields"]:
             to_schema.append({'id':custom_id_mapping[field['id']]})
-        to_api.put(f'custom_field_schema/{custom_field_type}',data={'fields':to_schema})
+        if to_schema!=[]:
+            to_api.put(f'custom_field_schema/{custom_field_type}',data={'fields':to_schema})
 
 
 if args.shared_custom_fields or args.all:
