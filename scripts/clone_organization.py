@@ -74,6 +74,9 @@ arg_parser.add_argument(
     help="Copy integration links",
 )
 arg_parser.add_argument("--roles", action="store_true", help="Copy roles")
+arg_parser.add_argument(
+    "--webhooks", action="store_true", help="Copy webhooks"
+)
 
 arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
@@ -363,6 +366,24 @@ if args.sequences or args.all:
                 print(f'Added `{sequence["name"]}`')
             except APIError as e:
                 print(f"Couldn't add `{sequence['name']}` because {str(e)}")
+
+        offset += len(resp["data"])
+        has_more = resp["has_more"]
+
+if args.webhooks or args.all:
+    print("\nCopying Webhooks")
+    has_more = True
+    offset = 0
+    while has_more:
+        resp = from_api.get("webhook", params={"_skip": offset})
+        for webhook in resp["data"]:
+            del webhook["id"]
+
+            try:
+                to_api.post("webhook", data=webhook)
+                print(f'Added `{webhook["url"]}`')
+            except APIError as e:
+                print(f"Couldn't add `{webhook['url']}` because {str(e)}")
 
         offset += len(resp["data"])
         has_more = resp["has_more"]
