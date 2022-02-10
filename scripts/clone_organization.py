@@ -17,7 +17,6 @@ arg_parser.add_argument(
     required=True,
     help="API Key for destination organization",
 )
-
 arg_parser.add_argument(
     "--lead-statuses",
     action="store_true",
@@ -28,37 +27,26 @@ arg_parser.add_argument(
     action="store_true",
     help="Copy opportunity statuses",
 )
-
 arg_parser.add_argument(
     "--lead-custom-fields",
     action="store_true",
     help="Copy lead custom fields",
 )
-
 arg_parser.add_argument(
     "--opp-custom-fields",
     action="store_true",
     help="Copy opportunity custom fields",
 )
-
-arg_parser.add_argument(
-    "--shared-custom-fields",
-    action="store_true",
-    help="Copy shared custom fields",
-)
-
 arg_parser.add_argument(
     "--contact-custom-fields",
     action="store_true",
     help="Copy contact custom fields",
 )
-
 arg_parser.add_argument(
     "--custom-activities",
     action="store_true",
     help="Copy custom activities",
 )
-
 arg_parser.add_argument(
     "--smart-views", action="store_true", help="Copy smart views"
 )
@@ -156,72 +144,62 @@ if args.opportunity_statuses or args.all:
                         f"Couldn't add `{opp_status['label']}` because {str(e)}"
                     )
 
-custom_id_mapping={}
+
 def copy_custom_fields(custom_field_type):
-    to_custom_fields=[]
+    # Get the existing shared custom fields in case the new org already has them
+    existing_shared_custom_fields = []
     has_more = True
     offset = 0
     while has_more:
-        resp = to_api.get(f"custom_field/{custom_field_type}", params={"_skip": offset})
-        for custom in resp['data']:
-            to_custom_fields.append(custom)
+        resp = to_api.get("custom_field/shared", params={"_skip": offset})
+        existing_shared_custom_fields.extend(resp['data'])
         offset += len(resp["data"])
         has_more = resp["has_more"]
 
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = to_api.get(f"custom_field/shared", params={"_skip": offset})
-        for custom in resp['data']:
-            for association in custom['associations']:
-                if association['object_type']==custom_field_type:
-                    to_custom_fields.append(custom)
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
-                    
+    from_custom_fields = from_api.get(
+        f"custom_field_schema/{custom_field_type}"
+    )["fields"]
 
+    for from_cf in from_custom_fields:
+        del from_cf["id"]
+        del from_cf["organization_id"]
 
-    has_more = True
-    offset = 0
-    
-    while has_more:
-        resp = from_api.get(
-            f"custom_field/{custom_field_type}", params={"_skip": offset}
-        )
-        for custom in resp["data"]:
-            old_custom_id=custom['id']
-            old_custom_name=custom['name']
-            del custom["id"]
-            del custom["organization_id"]
-            try:
-                new_custom=to_api.post(f"custom_field/{custom_field_type}", data=custom)
-                custom_id_mapping[old_custom_id]=new_custom['id']
-                print(f'Added `{custom["name"]}`')
-                if custom_field_type=='shared':
-                    for association in custom['associations']:
-                        if association['object_type']=='lead' or association['object_type']=='opportunity' or association['object_type']=='contact':
-                            to_api.post(f"custom_field/shared/{new_custom['id']}/association",data={'object_type':association['object_type']})
-            except APIError as e:
-                print(f"Couldn't add `{custom['name']}` because {str(e)}")
-                for custom2 in to_custom_fields:
-                    if custom2['name']==old_custom_name:
-                        custom_id_mapping[old_custom_id]=custom2['id']
+        try:
+            if from_cf['is_shared']:
+                to_cf = next(
+                    iter(
+                        [
+                            x
+                            for x in existing_shared_custom_fields
+                            if x['name'] == from_cf['name']
+                        ]
+                    ),
+                    None,
+                )
 
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
-    
-    if custom_field_type!='shared':
-        from_schema=from_api.get(f'custom_field_schema/{custom_field_type}')
-        to_schema=[]
-        for field in from_schema["fields"]:
-            to_schema.append({'id':custom_id_mapping[field['id']]})
-        if to_schema!=[]:
-            to_api.put(f'custom_field_schema/{custom_field_type}',data={'fields':to_schema})
+                if not to_cf:
+                    to_cf = to_api.post(f"custom_field/shared", data=from_cf)
+                    print(f'Created `{from_cf["name"]}` shared custom field')
 
+                # Only add association to a custom field type that's being copied.
+                #
+                # For example, if you have a shared field for leads and contacts, and you're copying only lead custom fields,
+                # we would add only `lead` association to that shared field.
+                to_api.post(
+                    f"custom_field/shared/{to_cf['id']}/association",
+                    data={'object_type': custom_field_type},
+                )
+                print(
+                    f"Added `{custom_field_type}` association to shared `{from_cf['name']}` custom field"
+                )
+            else:
+                to_api.post(f"custom_field/{custom_field_type}", data=from_cf)
+                print(
+                    f'Created `{from_cf["name"]}` {custom_field_type} custom field'
+                )
+        except APIError as e:
+            print(f"Couldn't add `{from_cf['name']}` because {str(e)}")
 
-if args.shared_custom_fields or args.all:
-    print("\nCopying Shared Custom Fields")
-    copy_custom_fields('shared')
 
 if args.lead_custom_fields or args.all:
     print("\nCopying Lead Custom Fields")
@@ -268,7 +246,7 @@ if args.smart_views or args.all:
             saved_search_array.append(saved_search)
         offset += len(resp["data"])
         has_more = resp["has_more"]
-    
+
     reverse = list(reversed(saved_search_array))
     for saved_search in reverse:
         error = ''
@@ -276,9 +254,7 @@ if args.smart_views or args.all:
             to_api.post("saved_search", data=saved_search)
             print(f'Added `{saved_search["name"]}`')
         except APIError as e:
-            print(
-                f"Couldn't add `{saved_search['name']}` because {str(e)}"
-            )
+            print(f"Couldn't add `{saved_search['name']}` because {str(e)}")
 
 if args.roles or args.all:
     BUILT_IN_ROLES = [
@@ -480,10 +456,10 @@ if args.custom_activities or args.all:
                 to_api.post(
                     f"custom_field/shared/{new_cf['id']}/association",
                     data={
-                        'object_type':'custom_activity_type',
+                        'object_type': 'custom_activity_type',
                         "custom_activity_type_id": new_activity_type["id"],
-                        "required": field['required']
-                    }
+                        "required": field['required'],
+                    },
                 )
             else:
                 # Non-shared (regular) field, just create it
