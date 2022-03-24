@@ -400,6 +400,25 @@ if args.custom_activities or args.all:
         # Create the activity type first, then add the fields to it below
         del activity_type["organization_id"]
 
+        # Re-map old role IDs to new role IDs (by name)
+        if activity_type['editable_with_roles']:
+            new_roles = to_api.get('role')['data']
+            new_editable_with_roles = []
+            for old_role_id in activity_type['editable_with_roles']:
+                if old_role_id.startswith('role_'):
+                    old_role_name = from_api.get(f'role/{old_role_id}')['name']
+                    new_role = next(
+                        (x for x in new_roles if x['name'] == old_role_name),
+                        None,
+                    )
+                    if new_role:
+                        new_editable_with_roles.append(new_role['id'])
+                else:
+                    # Built-in roles such as `admin`
+                    new_editable_with_roles.append(old_role_id)
+
+            activity_type['editable_with_roles'] = new_editable_with_roles
+
         try:
             new_activity_type = to_api.post(
                 "custom_activity", data=activity_type
