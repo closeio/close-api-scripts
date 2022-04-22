@@ -123,7 +123,12 @@ while has_more:
     cursor = resp['cursor_next']
     has_more = bool(cursor)
 
-f = open(f'{org_name} Delete Lead Events in 30 Days.csv', 'w', newline='', encoding='utf-8')
+f = open(
+    f'{org_name} Delete Lead Events in 30 Days.csv',
+    'w',
+    newline='',
+    encoding='utf-8',
+)
 try:
     writer = csv.writer(f)
     writer.writerow(
