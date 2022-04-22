@@ -243,7 +243,7 @@ def get_id_mappings():
             # Add `object_type` field so we can use it to match/map IDs later on in case there are 2 custom fields
             # with the same name - one Lead Custom Field, and another Custom Activity Custom Field
             schema_fields = [
-                x | {'object_type': schema} for x in schema_fields
+                {**x, **{'object_type': schema}} for x in schema_fields
             ]
             custom_fields.extend(schema_fields)
 

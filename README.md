@@ -5,7 +5,7 @@ using the [closeio_api Python client](https://github.com/closeio/closeio-api).
 
 ## Install basic dependencies
 
-Before you start, you should already have `git`, `python` (3.9) and `virtualenv` installed. For OS X users, we recommend [Homebrew](https://brew.sh/).
+Before you start, you should already have `git`, `python` (3.7) and `virtualenv` installed. For OS X users, we recommend [Homebrew](https://brew.sh/).
 
 ## Setup
 
