@@ -139,7 +139,7 @@ header_row['Validation Error'] = 'Validation Error'
 error_array.append(header_row)
 
 api = CloseIO_API(args.api_key)
-org_id = api.get('api_key/' + args.api_key)['organization_id']
+org_id = api.get('me')['organizations'][0]['id']
 org = api.get('organization/' + org_id)
 org_name = org['name']
 
@@ -368,7 +368,7 @@ for r in c:
             r['Validation Error'] = 'Lead does not exist in Close'
             skipped_leads += 1
             logging.info(
-                'line %d skipped: %s does not exist in Close.io'
+                'line %d skipped: %s does not exist in Close'
                 % (
                     c.line_num,
                     r['company']

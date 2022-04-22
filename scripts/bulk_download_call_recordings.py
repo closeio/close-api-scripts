@@ -1,20 +1,18 @@
-import gevent
 import gevent.monkey
 from gevent.pool import Pool
 
 gevent.monkey.patch_all()
 
 import argparse
-from closeio_api import Client as CloseIO_API, APIError
+from closeio_api import Client as CloseIO_API
 from dateutil.relativedelta import relativedelta
-from datetime import datetime, timedelta
-import base64
+from datetime import datetime
 import requests
 from operator import itemgetter
 import csv
 
 parser = argparse.ArgumentParser(
-    description='Bulk Download Close.io Call Recordings into a specified Folder'
+    description='Bulk Download Close Call Recordings into a specified Folder'
 )
 parser.add_argument('--api-key', '-k', required=True, help='API Key')
 parser.add_argument(
@@ -38,12 +36,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
-org_id = api.get(
-    f'api_key/{args.api_key}', params={'_fields': 'organization_id'}
-)['organization_id']
-org_name = api.get('organization/' + org_id, params={'_fields': 'name'})[
-    'name'
-].replace('/', '')
+
 days = []
 calls = []
 downloaded_calls = []
@@ -151,6 +144,7 @@ downloaded_calls = sorted(
     downloaded_calls, key=itemgetter('Date Created'), reverse=True
 )
 # Write Filename Output to CSV
+org_name = api.get('me')['organizations'][0]['name'].replace('/', '')
 f = open(
     f'{args.file_path}/{org_name} Downloaded Call Recordings from {args.date_start} to {args.date_end} Reference.csv',
     'w',

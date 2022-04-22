@@ -45,12 +45,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
-org_id = api.get(
-    'api_key/' + args.api_key, params={'_fields': 'organization_id'}
-)['organization_id']
-org_name = api.get('organization/' + org_id, params={'_fields': 'name'})[
-    'name'
-].replace('/', '')
+
 days = []
 activities = []
 
@@ -111,6 +106,7 @@ pool.map(getActivities, days)
 # Sort all activities by date_created to be in order because they were pulled in parallel
 activities = sorted(activities, key=itemgetter('date_created'), reverse=True)
 
+org_name = api.get('me')['organizations'][0]['name'].replace('/', '')
 with open(
     '%s - %s activity export between %s and %s.json'
     % (org_name, args.activity_type, args.date_start, args.date_end),

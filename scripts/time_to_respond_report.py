@@ -34,7 +34,7 @@ args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
 
-org_id = api.get('api_key/' + args.api_key)['organization_id']
+org_id = api.get('me')['organizations'][0]['id']
 org_name = api.get('organization/' + org_id)['name']
 org_memberships = api.get('organization/' + org_id)['memberships']
 

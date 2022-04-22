@@ -38,7 +38,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 api = CloseIO_API(args.api_key)
-org_id = api.get('api_key/' + args.api_key)['organization_id']
+org_id = api.get('me')['organizations'][0]['id']
 org = api.get(
     'organization/' + org_id,
     params={

@@ -25,22 +25,19 @@ events = []
 leads = []
 reverted_imports = {}
 
-api_key_info = api.get('api_key/' + args.api_key)
+me = api.get('me')
+org_id = me['organizations'][0]['id']
 org = api.get(
-    'organization/' + api_key_info['organization_id'],
+    f'organization/{org_id}',
     params={'_fields': 'name,memberships,inactive_memberships'},
 )
 org_memberships = org['memberships'] + org['inactive_memberships']
 org_name = org['name']
 
-api_key_user_info = next(
-    (x for x in org_memberships if api_key_info['user_id'] == x['user_id']),
-    None,
-)
-
+memberships = me['memberships']
 assert (
-    'role' in api_key_user_info and api_key_user_info['role'] == 'admin'
-), 'ERROR: You must be an admin in your Close.io organization to run this script'
+    len(memberships) and memberships[0]['role_id'] == 'admin'
+), 'ERROR: You must be an admin in your Close organization to run this script'
 
 users = {}
 
@@ -69,7 +66,7 @@ while has_more:
 
         if 'meta' in event:
             if 'bulk_action_id' in event['meta']:
-                event_data['how_deleted'] = "Bulk Delete via Close.io (%s)" % (
+                event_data['how_deleted'] = "Bulk Delete via Close (%s)" % (
                     event['meta']['bulk_action_id']
                 )
             elif 'merge_source_lead_id' in event['meta']:
@@ -79,7 +76,7 @@ while has_more:
             elif 'revert_import_id' in event['meta']:
                 event_data[
                     'how_deleted'
-                ] = "A Close.io Import Was Reverted (%s)" % (
+                ] = "A Close Import Was Reverted (%s)" % (
                     event['meta']['revert_import_id']
                 )
                 if event['meta']['revert_import_id'] not in reverted_imports:
@@ -109,7 +106,7 @@ while has_more:
             else:
                 event_data[
                     'how_deleted'
-                ] = "Manually in Close.io or via a single API Call"
+                ] = "Manually in Close or via a single API Call"
 
         if (
             'user_id' in event

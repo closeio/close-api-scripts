@@ -22,8 +22,9 @@ args = parser.parse_args()
 api = CloseIO_API(args.api_key)
 
 # Get IDs of all inactive users in a given org
-org_id = api.get('api_key/' + args.api_key)['organization_id']
-org = api.get('organization/' + org_id)
+org_id = api.get('me')['organizations'][0]['id']
+
+org = api.get(f'organization/{org_id}')
 inactive_users = [m['user_id'] for m in org['inactive_memberships']]
 
 # Get IDs of all the tasks assigned to these inactive users

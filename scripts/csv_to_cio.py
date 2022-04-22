@@ -22,7 +22,7 @@ parser.add_argument('--api-key', '-k', required=True, help='API Key')
 parser.add_argument(
     '--skip_duplicates',
     action='store_true',
-    help='Skip leads that are already present in Close.io (determined by company name).',
+    help='Skip leads that are already present in Close (determined by company name).',
 )
 parser.add_argument(
     '--no_grouping',

@@ -15,12 +15,14 @@ args = parser.parse_args()
 
 # Initialize the Close API and get all users in the org
 api = CloseIO_API(args.api_key)
-org_id = api.get('api_key/' + args.api_key)['organization_id']
+
+org_id = api.get('me')['organizations'][0]['id']
 org = api.get(
-    'organization/' + org_id,
+    f'organization/{org_id}',
     params={'_fields': 'inactive_memberships,memberships,name'},
 )
 org_name = org['name'].replace('/', '')
+
 memberships = org['memberships'] + org['inactive_memberships']
 users = {
     membership['user_id']: membership['user_full_name']
@@ -77,7 +79,7 @@ while has_more:
                 and event['meta'].get('merge_source_lead_id')
             ):
                 event_data = {
-                    'Current Lead URL': 'https://app.close.io/lead/%s/'
+                    'Current Lead URL': 'https://app.close.com/lead/%s/'
                     % event['meta']['merge_destination_lead_id'],
                     'Date': event['date_created'],
                     'Destination Lead Name': event['data']['display_name'],

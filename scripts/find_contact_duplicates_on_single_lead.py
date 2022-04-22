@@ -27,10 +27,7 @@ args = parser.parse_args()
 
 # Initialize Close API Wrapper
 api = CloseIO_API(args.api_key)
-org_id = api.get('api_key/' + args.api_key)['organization_id']
-org_name = api.get('organization/' + org_id, params={'_fields': 'name'})[
-    'name'
-].replace('/', '')
+org_name = api.get('me')['organizations'][0]['name'].replace('/', '')
 
 # Calculate number of slices necessary to get all leads
 total_leads = api.get(
