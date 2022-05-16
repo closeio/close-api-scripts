@@ -1,6 +1,7 @@
 import argparse
+from closeio_api import APIError
 
-from closeio_api import APIError, Client as CloseIO_API
+from scripts.CloseApiWrapper import CloseApiWrapper
 
 arg_parser = argparse.ArgumentParser(
     description="Clone one organization to another"
@@ -71,8 +72,8 @@ arg_parser.add_argument(
 )
 args = arg_parser.parse_args()
 
-from_api = CloseIO_API(args.from_api_key)
-to_api = CloseIO_API(args.to_api_key)
+from_api = CloseApiWrapper(args.from_api_key)
+to_api = CloseApiWrapper(args.to_api_key)
 
 from_organization = from_api.get("me")["organizations"][0]
 to_organization = to_api.get("me")["organizations"][0]
@@ -84,12 +85,8 @@ print(
 
 if args.lead_statuses or args.all:
     print("\nCopying Lead Statuses")
-    lead_status_list = from_api.get(
-        f"organization/{from_organization['id']}",
-        params={"_fields": "lead_statuses"},
-    )["lead_statuses"]
-
-    for index, status in enumerate(lead_status_list):
+    from_lead_statuses = from_api.get_lead_statuses()
+    for status in from_lead_statuses:
         del status["id"]
 
         try:
@@ -101,29 +98,22 @@ if args.lead_statuses or args.all:
 
 if args.opportunity_statuses or args.all:
     print("\nCopying Opportunity Statuses")
-    to_pipelines = to_api.get("pipeline")["data"]
-
-    from_pipelines = from_api.get(
-        f"organization/{from_organization['id']}",
-        params={"_fields": "pipelines"},
-    )["pipelines"]
-
+    to_pipelines = to_api.get_opportunity_pipelines()
+    from_pipelines = from_api.get_opportunity_pipelines()
     for from_pipeline in from_pipelines:
         # Try to find an existing pipeline by name
-        new_pipeline = next(
-            iter(
-                [x for x in to_pipelines if x["name"] == from_pipeline["name"]]
-            ),
+        to_pipeline = next(
+            (x for x in to_pipelines if x["name"] == from_pipeline["name"]),
             None,
         )
 
-        if not new_pipeline:
+        if not to_pipeline:
             # If the pipeline doesn't exist, create the pipeline alongside the statuses
             del from_pipeline["id"]
             del from_pipeline["organization_id"]
 
             try:
-                new_pipeline = to_api.post("pipeline", data=from_pipeline)
+                to_pipeline = to_api.post("pipeline", data=from_pipeline)
                 print(f'Added `{from_pipeline["name"]}` and its statuses')
             except APIError as e:
                 print(
@@ -133,7 +123,7 @@ if args.opportunity_statuses or args.all:
         else:
             # Otherwise append the statuses to an existing pipeline
             for opp_status in from_pipeline["statuses"]:
-                opp_status["pipeline_id"] = new_pipeline["id"]
+                opp_status["pipeline_id"] = to_pipeline["id"]
                 del opp_status["id"]
 
                 try:
@@ -147,14 +137,7 @@ if args.opportunity_statuses or args.all:
 
 def copy_custom_fields(custom_field_type):
     # Get the existing shared custom fields in case the new org already has them
-    existing_shared_custom_fields = []
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = to_api.get("custom_field/shared", params={"_skip": offset})
-        existing_shared_custom_fields.extend(resp['data'])
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+    to_shared_custom_fields = to_api.get_all_items('custom_field/shared')
 
     from_custom_fields = from_api.get(
         f"custom_field_schema/{custom_field_type}"
@@ -167,12 +150,10 @@ def copy_custom_fields(custom_field_type):
         try:
             if from_cf['is_shared']:
                 to_cf = next(
-                    iter(
-                        [
-                            x
-                            for x in existing_shared_custom_fields
-                            if x['name'] == from_cf['name']
-                        ]
+                    (
+                        x
+                        for x in to_shared_custom_fields
+                        if x['name'] == from_cf['name']
                     ),
                     None,
                 )
@@ -215,41 +196,154 @@ if args.contact_custom_fields or args.all:
 
 if args.integration_links or args.all:
     print("\nCopying Integration Links")
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = from_api.get("integration_link", params={"_skip": offset})
-        for link in resp["data"]:
-            del link["id"]
-            del link["organization_id"]
+    integration_links = from_api.get_all_items('integration_link')
+    for link in integration_links:
+        del link["id"]
+        del link["organization_id"]
 
-            try:
-                to_api.post("integration_link", data=link)
-                print(f'Added `{link["name"]}`')
-            except APIError as e:
-                print(f"Couldn't add `{link['name']}` because {str(e)}")
+        try:
+            to_api.post("integration_link", data=link)
+            print(f'Added `{link["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{link['name']}` because {str(e)}")
 
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+
+def get_id_mappings():
+    map_from_to_id = {}
+
+    # Custom Activity Types
+    from_custom_activities = from_api.get("custom_activity")["data"]
+    to_custom_activities = to_api.get("custom_activity")["data"]
+    for from_ca in from_custom_activities:
+        to_ca = next(
+            (x for x in to_custom_activities if x['name'] == from_ca['name']),
+            None,
+        )
+        if to_ca:
+            map_from_to_id[from_ca['id']] = to_ca['id']
+
+    # Custom fields
+    def get_custom_fields(api):
+        BUILT_IN_SCHEMES = [
+            'lead',
+            'contact',
+            'opportunity',
+        ]
+        custom_activity_type_ids = [
+            x['id'] for x in api.get("custom_activity")["data"]
+        ]
+
+        custom_fields = []
+        for schema in BUILT_IN_SCHEMES + custom_activity_type_ids:
+            if schema.startswith('actitype_'):
+                schema_fields = api.get_custom_fields(f"activity/{schema}")
+            else:
+                schema_fields = api.get_custom_fields(schema)
+
+            # Add `object_type` field so we can use it to match/map IDs later on in case there are 2 custom fields
+            # with the same name - one Lead Custom Field, and another Custom Activity Custom Field
+            schema_fields = [
+                {**x, **{'object_type': schema}} for x in schema_fields
+            ]
+            custom_fields.extend(schema_fields)
+
+        return custom_fields
+
+    from_custom_fields = get_custom_fields(from_api)
+    to_custom_fields = get_custom_fields(to_api)
+    for from_cf in from_custom_fields:
+        to_cf = next(
+            (
+                x
+                for x in to_custom_fields
+                if x['name'] == from_cf['name']
+                and (
+                    x['object_type'] == from_cf['object_type']
+                    or x['object_type']
+                    == map_from_to_id.get(from_cf['object_type'])
+                )
+            ),
+            None,
+        )
+        if to_cf:
+            map_from_to_id[from_cf['id']] = to_cf['id']
+
+    # Lead & opportunity statuses
+    from_statuses = (
+        from_api.get_lead_statuses() + from_api.get_opportunity_statuses()
+    )
+    to_statuses = (
+        to_api.get_lead_statuses() + to_api.get_opportunity_statuses()
+    )
+    for from_status in from_statuses:
+        to_status = next(
+            (x for x in to_statuses if x['label'] == from_status['label']),
+            None,
+        )
+        if to_status:
+            map_from_to_id[from_status['id']] = to_status['id']
+
+    # Email templates
+    from_templates = from_api.get_all_items('email_template')
+    to_templates = to_api.get_all_items('email_template')
+    for from_template in from_templates:
+        to_template = next(
+            (x for x in to_templates if x['name'] == from_template['name']),
+            None,
+        )
+        if to_template:
+            map_from_to_id[from_template['id']] = to_template['id']
+
+    # Sequences
+    from_sequences = from_api.get_all_items('sequence')
+    to_sequences = to_api.get_all_items('sequence')
+    for from_sequence in from_sequences:
+        to_sequence = next(
+            (x for x in to_sequences if x['name'] == from_sequence['name']),
+            None,
+        )
+        if to_sequence:
+            map_from_to_id[from_sequence['id']] = to_sequence['id']
+
+    return map_from_to_id
+
 
 if args.smart_views or args.all:
     print("\nCopying Smart Views")
-    has_more = True
-    offset = 0
-    saved_search_array = []
-    while has_more:
-        resp = from_api.get("saved_search", params={"_skip": offset})
-        for saved_search in resp["data"]:
-            del saved_search["id"]
-            del saved_search["organization_id"]
-            del saved_search["user_id"]
-            saved_search_array.append(saved_search)
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+    from_smart_views = from_api.get_all_items('saved_search')
+    for smart_view in from_smart_views:
+        del smart_view["id"]
+        del smart_view["organization_id"]
+        del smart_view["user_id"]
 
-    reverse = list(reversed(saved_search_array))
+    # Used to map old to new IDs (custom fields, custom activity types, lead & opportunity statuses, email templates...)
+    # that will be used in global search & replace within each Smart View query
+    map_from_to_id = None
+
+    # Sort Smart Views as they appear in the original organization (when you add a new Smart View, it will show up
+    # at the top of the list)
+    reverse = list(reversed(from_smart_views))
     for saved_search in reverse:
-        error = ''
+        s_query = saved_search.get('s_query')
+        if s_query:
+            # Structured query, replace IDs
+            if not map_from_to_id:
+                map_from_to_id = get_id_mappings()
+
+            def nested_replace(value):
+                if type(value) == list:
+                    return [nested_replace(item) for item in value]
+
+                if type(value) == dict:
+                    return {
+                        key: nested_replace(value)
+                        for key, value in value.items()
+                    }
+
+                return map_from_to_id.get(value, value)
+
+            saved_search['s_query'] = nested_replace(s_query)
+
         try:
             to_api.post("saved_search", data=saved_search)
             print(f'Added `{saved_search["name"]}`')
@@ -265,67 +359,47 @@ if args.roles or args.all:
     ]
 
     print("\nCopying Roles")
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = from_api.get("role", params={"_skip": offset})
-        for role in resp["data"]:
-            if role["name"] in BUILT_IN_ROLES:
-                continue
+    roles = from_api.get_all_items('role')
+    for role in roles:
+        if role["name"] in BUILT_IN_ROLES:
+            continue
 
-            del role["id"]
-            del role["organization_id"]
+        del role["id"]
+        del role["organization_id"]
 
-            try:
-                to_api.post("role", data=role)
-                print(f'Added `{role["name"]}`')
-            except APIError as e:
-                print(f"Couldn't add `{role['name']}` because {str(e)}")
-
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+        try:
+            to_api.post("role", data=role)
+            print(f'Added `{role["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{role['name']}` because {str(e)}")
 
 if args.templates or args.all:
     print("\nCopying Templates")
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = from_api.get("email_template", params={"_skip": offset})
-        for template in resp["data"]:
-            del template["id"]
-            del template["organization_id"]
+    templates = from_api.get_all_items('email_template')
+    for template in templates:
+        del template["id"]
+        del template["organization_id"]
 
-            try:
-                to_api.post("email_template", data=template)
-                print(f'Added `{template["name"]}`')
-            except APIError as e:
-                print(f"Couldn't add `{template['name']}` because {str(e)}")
-
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+        try:
+            to_api.post("email_template", data=template)
+            print(f'Added `{template["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{template['name']}` because {str(e)}")
 
 # Assumes all the sequence steps (templates) were already transferred over
 if args.sequences or args.all:
     print("\nCopying Sequences")
 
-    to_templates = []
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = to_api.get("email_template", params={"_skip": offset})
-        to_templates.extend(resp['data'])
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+    to_templates = to_api.get_all_items('email_template')
+    from_sequences = from_api.get_all_items('sequence')
+    for sequence in from_sequences:
+        del sequence["id"]
+        del sequence["organization_id"]
+        for step in sequence["steps"]:
+            del step["id"]
 
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = from_api.get("sequence", params={"_skip": offset})
-        for sequence in resp["data"]:
-            del sequence["id"]
-            del sequence["organization_id"]
-            for step in sequence["steps"]:
-                del step["id"]
+            # Replace Email Template ID (if it exists ie. it's an Email step)
+            if step['email_template_id']:
                 from_template = from_api.get(
                     f"email_template/{step['email_template_id']}",
                     params={'_fields': 'name'},
@@ -337,69 +411,38 @@ if args.sequences or args.all:
                     ):
                         step["email_template_id"] = template["id"]
 
-            try:
-                to_api.post("sequence", data=sequence)
-                print(f'Added `{sequence["name"]}`')
-            except APIError as e:
-                print(f"Couldn't add `{sequence['name']}` because {str(e)}")
-
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+        try:
+            to_api.post("sequence", data=sequence)
+            print(f'Added `{sequence["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{sequence['name']}` because {str(e)}")
 
 if args.webhooks or args.all:
     print("\nCopying Webhooks")
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = from_api.get("webhook", params={"_skip": offset})
-        for webhook in resp["data"]:
-            del webhook["id"]
+    webhooks = from_api.get_all_items('webhook')
+    for webhook in webhooks:
+        del webhook["id"]
 
-            try:
-                to_api.post("webhook", data=webhook)
-                print(f'Added `{webhook["url"]}`')
-            except APIError as e:
-                print(f"Couldn't add `{webhook['url']}` because {str(e)}")
+        try:
+            to_api.post("webhook", data=webhook)
+            print(f'Added `{webhook["url"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{webhook['url']}` because {str(e)}")
 
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
 
 if args.custom_activities or args.all:
     print("\nCopying Custom Activities")
 
     # Fetch both shared and non-shared activity custom fields
-    source_custom_fields = []
-
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = from_api.get("custom_field/activity", params={"_skip": offset})
-        source_custom_fields.extend(resp['data'])
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = from_api.get("custom_field/shared", params={"_skip": offset})
-        source_custom_fields.extend(resp['data'])
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+    from_custom_fields = from_api.get_all_items(
+        'custom_field/activity'
+    ) + from_api.get_all_items('custom_field/shared')
 
     # Get the existing shared custom fields in case the new org already has them
-    existing_shared_custom_fields = []
-    has_more = True
-    offset = 0
-    while has_more:
-        resp = to_api.get("custom_field/shared", params={"_skip": offset})
-        existing_shared_custom_fields.extend(resp['data'])
-        offset += len(resp["data"])
-        has_more = resp["has_more"]
+    to_shared_custom_fields = to_api.get_all_items('custom_field/shared')
 
-    custom_activities = from_api.get("custom_activity")["data"]
-    for activity_type in custom_activities:
-        # Create the activity type first, then add the fields to it below
-        del activity_type["organization_id"]
-
+    custom_activity_types = from_api.get("custom_activity")["data"]
+    for activity_type in custom_activity_types:
         # Re-map old role IDs to new role IDs (by name)
         if activity_type['editable_with_roles']:
             new_roles = to_api.get('role')['data']
@@ -420,6 +463,7 @@ if args.custom_activities or args.all:
             activity_type['editable_with_roles'] = new_editable_with_roles
 
         try:
+            del activity_type["organization_id"]
             new_activity_type = to_api.post(
                 "custom_activity", data=activity_type
             )
@@ -432,39 +476,33 @@ if args.custom_activities or args.all:
 
         for field in activity_type["fields"]:
             # Get the object directly because some fields like `choices` aren't exposed in activity type `fields` array
-            source_field = next(
-                iter(
-                    [x for x in source_custom_fields if x["id"] == field["id"]]
-                ),
+            from_field = next(
+                (x for x in from_custom_fields if x["id"] == field["id"]),
                 None,
             )
-            source_field.pop('organization_id', None)
+            from_field.pop('organization_id', None)
 
             if field["is_shared"]:
-                destination_field = next(
-                    iter(
-                        [
-                            x
-                            for x in existing_shared_custom_fields
-                            if x['name'] == field['name']
-                        ]
+                to_field = next(
+                    (
+                        x
+                        for x in to_shared_custom_fields
+                        if x['name'] == field['name']
                     ),
                     None,
                 )
 
-                if destination_field:
-                    new_cf = destination_field
-                else:
+                if not to_field:
                     # Create new shared field because it doesn't exist yet
                     try:
                         # Delete `associations` field as that references old (source) activities
-                        del source_field['associations']
+                        del from_field['associations']
 
-                        new_cf = to_api.post(
+                        to_field = to_api.post(
                             f"custom_field/shared/",
-                            data=source_field,
+                            data=from_field,
                         )
-                        existing_shared_custom_fields.append(new_cf)
+                        to_shared_custom_fields.append(to_field)
                         print(f"Added `{field['name']}` shared field")
                     except APIError as e:
                         print(
@@ -473,16 +511,15 @@ if args.custom_activities or args.all:
                         continue
 
                 to_api.post(
-                    f"custom_field/shared/{new_cf['id']}/association",
+                    f"custom_field/shared/{to_field['id']}/association",
                     data={
                         'object_type': 'custom_activity_type',
                         "custom_activity_type_id": new_activity_type["id"],
                         "required": field['required'],
+                        'editable_with_roles': field['editable_with_roles'],
                     },
                 )
             else:
                 # Non-shared (regular) field, just create it
-                source_field["custom_activity_type_id"] = new_activity_type[
-                    "id"
-                ]
-                to_api.post("custom_field/activity/", data=source_field)
+                from_field["custom_activity_type_id"] = new_activity_type["id"]
+                to_api.post("custom_field/activity/", data=from_field)
