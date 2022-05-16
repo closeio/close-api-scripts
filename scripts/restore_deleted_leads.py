@@ -1,10 +1,10 @@
 import argparse
 
 import gevent.monkey
-from closeio_api import APIError, Client as CloseIO_API
-from gevent.pool import Pool
 
 gevent.monkey.patch_all()
+from closeio_api import APIError, Client as CloseIO_API
+from gevent.pool import Pool
 
 parser = argparse.ArgumentParser(
     description='Restore an array of deleted leads by ID. This CANNOT restore status changes or call recordings.'
