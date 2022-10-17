@@ -52,7 +52,13 @@ arg_parser.add_argument(
     "--smart-views", action="store_true", help="Copy smart views"
 )
 arg_parser.add_argument(
-    "--templates", action="store_true", help="Copy templates"
+    "--templates", action="store_true", help="Copy email & SMS templates"
+)
+arg_parser.add_argument(
+    "--email-templates", action="store_true", help="Copy email templates"
+)
+arg_parser.add_argument(
+    "--sms-templates", action="store_true", help="Copy SMS templates"
 )
 arg_parser.add_argument(
     "--sequences", action="store_true", help="Copy sequences"
@@ -294,6 +300,17 @@ def get_id_mappings():
         if to_template:
             map_from_to_id[from_template['id']] = to_template['id']
 
+    # SMS templates
+    from_templates = from_api.get_all_items('sms_template')
+    to_templates = to_api.get_all_items('sms_template')
+    for from_template in from_templates:
+        to_template = next(
+            (x for x in to_templates if x['name'] == from_template['name']),
+            None,
+        )
+        if to_template:
+            map_from_to_id[from_template['id']] = to_template['id']
+
     # Sequences
     from_sequences = from_api.get_all_items('sequence')
     to_sequences = to_api.get_all_items('sequence')
@@ -373,8 +390,8 @@ if args.roles or args.all:
         except APIError as e:
             print(f"Couldn't add `{role['name']}` because {str(e)}")
 
-if args.templates or args.all:
-    print("\nCopying Templates")
+if args.templates or args.email_templates or args.all:
+    print("\nCopying Email Templates")
     templates = from_api.get_all_items('email_template')
     for template in templates:
         del template["id"]
@@ -386,11 +403,25 @@ if args.templates or args.all:
         except APIError as e:
             print(f"Couldn't add `{template['name']}` because {str(e)}")
 
+if args.templates or args.sms_templates or args.all:
+    print("\nCopying SMS Templates")
+    templates = from_api.get_all_items('sms_template')
+    for template in templates:
+        del template["id"]
+        del template["organization_id"]
+
+        try:
+            to_api.post("sms_template", data=template)
+            print(f'Added `{template["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{template['name']}` because {str(e)}")
+
 # Assumes all the sequence steps (templates) were already transferred over
 if args.sequences or args.all:
     print("\nCopying Sequences")
 
-    to_templates = to_api.get_all_items('email_template')
+    to_email_templates = to_api.get_all_items('email_template')
+    to_sms_templates = to_api.get_all_items('sms_template')
     from_sequences = from_api.get_all_items('sequence')
     for sequence in from_sequences:
         del sequence["id"]
@@ -399,17 +430,30 @@ if args.sequences or args.all:
             del step["id"]
 
             # Replace Email Template ID (if it exists ie. it's an Email step)
-            if step['email_template_id']:
+            if step.get('email_template_id'):
                 from_template = from_api.get(
                     f"email_template/{step['email_template_id']}",
                     params={'_fields': 'name'},
                 )
-                for template in to_templates:
+                for template in to_email_templates:
                     if (
                         template["name"] == from_template["name"]
                         and template["is_shared"]
                     ):
                         step["email_template_id"] = template["id"]
+
+            # Replace SMS Template ID (if it exists ie. it's a SMS step)
+            if step.get('sms_template_id'):
+                from_template = from_api.get(
+                    f"sms_template/{step['sms_template_id']}",
+                    params={'_fields': 'name'},
+                )
+                for template in to_sms_templates:
+                    if (
+                        template["name"] == from_template["name"]
+                        and template["is_shared"]
+                    ):
+                        step["sms_template_id"] = template["id"]
 
         try:
             to_api.post("sequence", data=sequence)
