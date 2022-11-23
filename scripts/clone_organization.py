@@ -461,7 +461,7 @@ if args.sequences or args.all:
         except APIError as e:
             print(f"Couldn't add `{sequence['name']}` because {str(e)}")
 
-if args.webhooks or args.all:
+if args.webhooks:
     print("\nCopying Webhooks")
     webhooks = from_api.get_all_items('webhook')
     for webhook in webhooks:
