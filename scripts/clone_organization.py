@@ -19,6 +19,11 @@ arg_parser.add_argument(
     help="API Key for destination organization",
 )
 arg_parser.add_argument(
+    "--statuses",
+    action="store_true",
+    help="Copy lead & opportunity statuses",
+)
+arg_parser.add_argument(
     "--lead-statuses",
     action="store_true",
     help="Copy lead statuses",
@@ -27,6 +32,11 @@ arg_parser.add_argument(
     "--opportunity-statuses",
     action="store_true",
     help="Copy opportunity statuses",
+)
+arg_parser.add_argument(
+    "--custom-fields",
+    action="store_true",
+    help="Copy lead, contact, and opportunity custom fields",
 )
 arg_parser.add_argument(
     "--lead-custom-fields",
@@ -88,8 +98,7 @@ print(
     f"Copying items from `{from_organization['name']}` to `{to_organization['name']}`..."
 )
 
-
-if args.lead_statuses or args.all:
+if args.lead_statuses or args.statuses or args.all:
     print("\nCopying Lead Statuses")
     from_lead_statuses = from_api.get_lead_statuses()
     for status in from_lead_statuses:
@@ -102,7 +111,7 @@ if args.lead_statuses or args.all:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
 
 
-if args.opportunity_statuses or args.all:
+if args.opportunity_statuses or args.statuses or args.all:
     print("\nCopying Opportunity Statuses")
     to_pipelines = to_api.get_opportunity_pipelines()
     from_pipelines = from_api.get_opportunity_pipelines()
@@ -188,15 +197,15 @@ def copy_custom_fields(custom_field_type):
             print(f"Couldn't add `{from_cf['name']}` because {str(e)}")
 
 
-if args.lead_custom_fields or args.all:
+if args.lead_custom_fields or args.custom_fields or args.all:
     print("\nCopying Lead Custom Fields")
     copy_custom_fields('lead')
 
-if args.opp_custom_fields or args.all:
+if args.opp_custom_fields or args.custom_fields or args.all:
     print("\nCopying Opportunity Custom Fields")
     copy_custom_fields('opportunity')
 
-if args.contact_custom_fields or args.all:
+if args.contact_custom_fields or args.custom_fields or args.all:
     print("\nCopying Contact Custom Fields")
     copy_custom_fields('contact')
 
