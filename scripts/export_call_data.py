@@ -101,7 +101,7 @@ has_more = True
 offset = 0
 params[
     '_fields'
-] = 'id,user_id,duration,direction,date_created,remote_phone,local_phone,voicemail_url,recording_url,source,lead_id,updated_by_name'
+] = 'id,user_id,duration,disposition,status,direction,date_created,remote_phone,local_phone,voicemail_url,recording_url,source,lead_id,updated_by_name'
 
 if args.call_costs:
     params['_fields'] += ',cost'
