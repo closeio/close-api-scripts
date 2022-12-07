@@ -273,6 +273,9 @@ for lead in leads:
     if args.field in ['all', 'email', 'phone', 'contact_name']:
         for contact in lead['contacts']:
             if args.field in ['all', 'contact_name']:
+                if not contact['name']:
+                    continue
+
                 contact_name = contact['name'].strip().lower()
                 if (
                     contact_names.get(contact_name)
