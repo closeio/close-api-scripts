@@ -4,4 +4,4 @@ python-dateutil==2.7.3
 requests==2.20.0
 Unidecode==1.0.22
 closeio==2.0
-gevent==21.1.2
+gevent==22.10.2
