@@ -44,7 +44,7 @@ arg_parser.add_argument(
     help="Copy lead custom fields",
 )
 arg_parser.add_argument(
-    "--opp-custom-fields",
+    "--opportunity-custom-fields",
     action="store_true",
     help="Copy opportunity custom fields",
 )
@@ -82,7 +82,6 @@ arg_parser.add_argument("--roles", action="store_true", help="Copy roles")
 arg_parser.add_argument(
     "--webhooks", action="store_true", help="Copy webhooks"
 )
-
 arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
 )
@@ -94,27 +93,31 @@ to_api = CloseApiWrapper(args.to_api_key)
 from_organization = from_api.get("me")["organizations"][0]
 to_organization = to_api.get("me")["organizations"][0]
 
-print(
-    f"Copying items from `{from_organization['name']}` to `{to_organization['name']}`..."
-)
+message = f"Cloning `{from_organization['name']}` ({from_organization['id']}) organization to `{to_organization['name']}` ({to_organization['id']})..."
+message += '\nData from source organization will be added to the destination organization. No data will be deleted.\n\nContinue?'
+
+confirmed = input(f"{message} (y/n)\n")
+if confirmed not in ["yes", "y"]:
+    exit()
 
 if args.lead_statuses or args.statuses or args.all:
     print("\nCopying Lead Statuses")
+
     from_lead_statuses = from_api.get_lead_statuses()
     for status in from_lead_statuses:
         del status["id"]
 
         try:
             to_api.post("status/lead", data=status)
-            print(f'Added `{status["label"]}`')
+            print(f'Added lead status `{status["label"]}`')
         except APIError as e:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
-
 
 if args.opportunity_statuses or args.statuses or args.all:
     print("\nCopying Opportunity Statuses")
     to_pipelines = to_api.get_opportunity_pipelines()
     from_pipelines = from_api.get_opportunity_pipelines()
+
     for from_pipeline in from_pipelines:
         # Try to find an existing pipeline by name
         to_pipeline = next(
@@ -143,7 +146,7 @@ if args.opportunity_statuses or args.statuses or args.all:
 
                 try:
                     to_api.post("status/opportunity", data=opp_status)
-                    print(f'Added `{opp_status["label"]}`')
+                    print(f'Added opportunity status `{opp_status["label"]}`')
                 except APIError as e:
                     print(
                         f"Couldn't add `{opp_status['label']}` because {str(e)}"
@@ -201,7 +204,7 @@ if args.lead_custom_fields or args.custom_fields or args.all:
     print("\nCopying Lead Custom Fields")
     copy_custom_fields('lead')
 
-if args.opp_custom_fields or args.custom_fields or args.all:
+if args.opportunity_custom_fields or args.custom_fields or args.all:
     print("\nCopying Opportunity Custom Fields")
     copy_custom_fields('opportunity')
 
@@ -272,11 +275,11 @@ def get_id_mappings():
                 x
                 for x in to_custom_fields
                 if x['name'] == from_cf['name']
-                and (
-                    x['object_type'] == from_cf['object_type']
-                    or x['object_type']
-                    == map_from_to_id.get(from_cf['object_type'])
-                )
+                   and (
+                           x['object_type'] == from_cf['object_type']
+                           or x['object_type']
+                           == map_from_to_id.get(from_cf['object_type'])
+                   )
             ),
             None,
         )
@@ -285,10 +288,10 @@ def get_id_mappings():
 
     # Lead & opportunity statuses
     from_statuses = (
-        from_api.get_lead_statuses() + from_api.get_opportunity_statuses()
+            from_api.get_lead_statuses() + from_api.get_opportunity_statuses()
     )
     to_statuses = (
-        to_api.get_lead_statuses() + to_api.get_opportunity_statuses()
+            to_api.get_lead_statuses() + to_api.get_opportunity_statuses()
     )
     for from_status in from_statuses:
         to_status = next(
@@ -356,6 +359,7 @@ if args.smart_views or args.all:
             if not map_from_to_id:
                 map_from_to_id = get_id_mappings()
 
+
             def nested_replace(value):
                 if type(value) == list:
                     return [nested_replace(item) for item in value]
@@ -367,6 +371,7 @@ if args.smart_views or args.all:
                     }
 
                 return map_from_to_id.get(value, value)
+
 
             saved_search['s_query'] = nested_replace(s_query)
 
@@ -446,8 +451,8 @@ if args.sequences or args.all:
                 )
                 for template in to_email_templates:
                     if (
-                        template["name"] == from_template["name"]
-                        and template["is_shared"]
+                            template["name"] == from_template["name"]
+                            and template["is_shared"]
                     ):
                         step["email_template_id"] = template["id"]
 
@@ -459,8 +464,8 @@ if args.sequences or args.all:
                 )
                 for template in to_sms_templates:
                     if (
-                        template["name"] == from_template["name"]
-                        and template["is_shared"]
+                            template["name"] == from_template["name"]
+                            and template["is_shared"]
                     ):
                         step["sms_template_id"] = template["id"]
 
@@ -481,7 +486,6 @@ if args.webhooks:
             print(f'Added `{webhook["url"]}`')
         except APIError as e:
             print(f"Couldn't add `{webhook['url']}` because {str(e)}")
-
 
 if args.custom_activities or args.all:
     print("\nCopying Custom Activities")
