@@ -1,4 +1,5 @@
 import argparse
+
 from closeio_api import APIError
 
 from scripts.CloseApiWrapper import CloseApiWrapper
@@ -338,48 +339,95 @@ def get_id_mappings():
 
 
 if args.smart_views or args.all:
+
+    def structured_replace(value, replacement_dictionary):
+        '''
+        Recursively replace values in a dictionary with values from a replacement dictionary.
+        This is used to replace IDs in source Smart Views with the new IDs in the destination account.
+
+        IDs can be lead status IDs, opportunity status IDs, email templates, sequences, custom fields, etc. - pretty
+        much anything apart from Smart View IDs which are handled separately as they are not known until the Smart View
+        is created.
+        '''
+        if type(value) == list:
+            return [structured_replace(item, replacement_dictionary) for item in value]
+
+        if type(value) == dict:
+            return {
+                key: structured_replace(value, replacement_dictionary)
+                for key, value in value.items()
+            }
+
+        return replacement_dictionary.get(value, value)
+
+
+    def textual_replace(value, replacement_dictionary):
+        '''
+        Simple global & replace of IDs in source Smart Views with the new IDs in the destination account.
+        Used only for deprecated (textual) queries.
+        '''
+        for from_id, to_id in replacement_dictionary.items():
+            value = value.replace(from_id, to_id)
+
+        return value
+
+
     print("\nCopying Smart Views")
     from_smart_views = from_api.get_all_items('saved_search')
-    for smart_view in from_smart_views:
-        del smart_view["id"]
-        del smart_view["organization_id"]
-        del smart_view["user_id"]
 
     # Used to map old to new IDs (custom fields, custom activity types, lead & opportunity statuses, email templates...)
     # that will be used in global search & replace within each Smart View query
     map_from_to_id = None
 
-    # Sort Smart Views as they appear in the original organization (when you add a new Smart View, it will show up
-    # at the top of the list)
+    # Used to map old to new Smart View IDs for Smart Views that use `in:SMART_VIEW_ID` in their queries
+    map_from_to_smart_view_id = {}
+    created_smart_views = []
+
+    # Sort Smart Views as they appear in the original organization
+    # (when you add a new Smart View, it will show up at the top of the list)
     reverse = list(reversed(from_smart_views))
-    for saved_search in reverse:
-        s_query = saved_search.get('s_query')
+
+    # Create Smart Views in the destination organization
+    for smart_view in reverse:
+        # Replace IDs
+        s_query = smart_view.get('s_query')
+        query = smart_view.get('query')
+
         if s_query:
-            # Structured query, replace IDs
             if not map_from_to_id:
                 map_from_to_id = get_id_mappings()
 
-
-            def nested_replace(value):
-                if type(value) == list:
-                    return [nested_replace(item) for item in value]
-
-                if type(value) == dict:
-                    return {
-                        key: nested_replace(value)
-                        for key, value in value.items()
-                    }
-
-                return map_from_to_id.get(value, value)
-
-
-            saved_search['s_query'] = nested_replace(s_query)
+            smart_view['s_query'] = structured_replace(s_query, map_from_to_id)
+        elif query:
+            smart_view['query'] = textual_replace(query, map_from_to_id)
 
         try:
-            to_api.post("saved_search", data=saved_search)
-            print(f'Added `{saved_search["name"]}`')
+            old_id = smart_view.pop('id')
+            del smart_view["organization_id"]
+            del smart_view["user_id"]
+
+            new_smart_view = to_api.post("saved_search", data=smart_view)
+            map_from_to_smart_view_id[old_id] = new_smart_view['id']
+
+            created_smart_views.append(new_smart_view)
+            print(f'Added `{smart_view["name"]}`')
         except APIError as e:
-            print(f"Couldn't add `{saved_search['name']}` because {str(e)}")
+            print(f"Couldn't add `{smart_view['name']}` because {str(e)}")
+
+    # Replace any Smart View IDs in case one Smart View is nested within the other
+    for smart_view in created_smart_views:
+        # Replace Smart View IDs
+        s_query = smart_view.get('s_query')
+        query = smart_view.get('query')
+
+        if s_query:
+            smart_view['s_query'] = structured_replace(s_query, map_from_to_smart_view_id)
+        elif query:
+            smart_view['query'] = textual_replace(query, map_from_to_smart_view_id)
+
+        # Update the Smart View if necessary
+        if smart_view['s_query'] != s_query or smart_view['query'] != query:
+            to_api.put(f"saved_search/{smart_view['id']}", data=smart_view)
 
 if args.roles or args.all:
     BUILT_IN_ROLES = [
