@@ -84,6 +84,13 @@ arg_parser.add_argument(
     "--webhooks", action="store_true", help="Copy webhooks"
 )
 arg_parser.add_argument(
+    "--groups", action="store_true", help="Copy groups without members."
+)
+arg_parser.add_argument(
+    "--groups-with-members", action="store_true", help="Copy groups including members. Any member that hasn't been "
+                                                       "added to the destination organization will be skipped."
+)
+arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
 )
 args = arg_parser.parse_args()
@@ -534,6 +541,27 @@ if args.webhooks:
             print(f'Added `{webhook["url"]}`')
         except APIError as e:
             print(f"Couldn't add `{webhook['url']}` because {str(e)}")
+
+if args.groups or args.groups_with_members or args.all:
+    print("\nCopying Groups")
+    groups = from_api.get('group')['data']
+    for group in groups:
+        group = from_api.get(f'group/{group["id"]}', params={'_fields': 'name,members'})
+
+        try:
+            new_group = to_api.post('group', data={'name': group['name']})
+
+            if args.groups_with_members:
+                for member in group['members']:
+                    try:
+                        to_api.post(f'group/{new_group["id"]}/member', data={'user_id': member['user_id']})
+                    except APIError as e:
+                        if 'Invalid organization members' in str(e):
+                            pass
+
+            print(f'Added `{group["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{group['name']}` because {str(e)}")
 
 if args.custom_activities or args.all:
     print("\nCopying Custom Activities")
