@@ -233,129 +233,6 @@ if args.integration_links or args.all:
         except APIError as e:
             print(f"Couldn't add `{link['name']}` because {str(e)}")
 
-
-def get_id_mappings():
-    map_from_to_id = {}
-
-    # Custom Activity Types
-    from_custom_activities = from_api.get("custom_activity")["data"]
-    to_custom_activities = to_api.get("custom_activity")["data"]
-    for from_ca in from_custom_activities:
-        to_ca = next(
-            (x for x in to_custom_activities if x['name'] == from_ca['name']),
-            None,
-        )
-        if to_ca:
-            map_from_to_id[from_ca['id']] = to_ca['id']
-
-    # Custom fields
-    def get_custom_fields(api):
-        BUILT_IN_SCHEMES = [
-            'lead',
-            'contact',
-            'opportunity',
-        ]
-        custom_activity_type_ids = [
-            x['id'] for x in api.get("custom_activity")["data"]
-        ]
-
-        custom_fields = []
-        for schema in BUILT_IN_SCHEMES + custom_activity_type_ids:
-            if schema.startswith('actitype_'):
-                schema_fields = api.get_custom_fields(f"activity/{schema}")
-            else:
-                schema_fields = api.get_custom_fields(schema)
-
-            # Add `object_type` field so we can use it to match/map IDs later on in case there are 2 custom fields
-            # with the same name - one Lead Custom Field, and another Custom Activity Custom Field
-            schema_fields = [
-                {**x, **{'object_type': schema}} for x in schema_fields
-            ]
-            custom_fields.extend(schema_fields)
-
-        return custom_fields
-
-    from_custom_fields = get_custom_fields(from_api)
-    to_custom_fields = get_custom_fields(to_api)
-    for from_cf in from_custom_fields:
-        to_cf = next(
-            (
-                x
-                for x in to_custom_fields
-                if x['name'] == from_cf['name']
-                   and (
-                           x['object_type'] == from_cf['object_type']
-                           or x['object_type']
-                           == map_from_to_id.get(from_cf['object_type'])
-                   )
-            ),
-            None,
-        )
-        if to_cf:
-            map_from_to_id[from_cf['id']] = to_cf['id']
-
-    # Lead & opportunity statuses
-    from_statuses = (
-            from_api.get_lead_statuses() + from_api.get_opportunity_statuses()
-    )
-    to_statuses = (
-            to_api.get_lead_statuses() + to_api.get_opportunity_statuses()
-    )
-    for from_status in from_statuses:
-        to_status = next(
-            (x for x in to_statuses if x['label'] == from_status['label']),
-            None,
-        )
-        if to_status:
-            map_from_to_id[from_status['id']] = to_status['id']
-
-    # Email templates
-    from_templates = from_api.get_all_items('email_template')
-    to_templates = to_api.get_all_items('email_template')
-    for from_template in from_templates:
-        to_template = next(
-            (x for x in to_templates if x['name'] == from_template['name']),
-            None,
-        )
-        if to_template:
-            map_from_to_id[from_template['id']] = to_template['id']
-
-    # SMS templates
-    from_templates = from_api.get_all_items('sms_template')
-    to_templates = to_api.get_all_items('sms_template')
-    for from_template in from_templates:
-        to_template = next(
-            (x for x in to_templates if x['name'] == from_template['name']),
-            None,
-        )
-        if to_template:
-            map_from_to_id[from_template['id']] = to_template['id']
-
-    # Sequences
-    from_sequences = from_api.get_all_items('sequence')
-    to_sequences = to_api.get_all_items('sequence')
-    for from_sequence in from_sequences:
-        to_sequence = next(
-            (x for x in to_sequences if x['name'] == from_sequence['name']),
-            None,
-        )
-        if to_sequence:
-            map_from_to_id[from_sequence['id']] = to_sequence['id']
-
-    # Groups
-    from_groups = from_api.get('group', params={'_fields': 'id,name'})['data']
-    to_groups = to_api.get('group', params={'_fields': 'id,name'})['data']
-    for from_group in from_groups:
-        to_group = next(
-            (x for x in to_groups if x['name'] == from_group['name']),
-            None,
-        )
-        if to_group:
-            map_from_to_id[from_group['id']] = to_group['id']
-
-    return map_from_to_id
-
-
 if args.roles or args.all:
     BUILT_IN_ROLES = [
         "Admin",
@@ -599,12 +476,134 @@ if args.smart_views or args.all:
         return value
 
 
+    def get_id_mappings():
+        map_from_to_id = {}
+
+        # Custom Activity Types
+        from_custom_activities = from_api.get("custom_activity")["data"]
+        to_custom_activities = to_api.get("custom_activity")["data"]
+        for from_ca in from_custom_activities:
+            to_ca = next(
+                (x for x in to_custom_activities if x['name'] == from_ca['name']),
+                None,
+            )
+            if to_ca:
+                map_from_to_id[from_ca['id']] = to_ca['id']
+
+        # Custom fields
+        def get_custom_fields(api):
+            BUILT_IN_SCHEMES = [
+                'lead',
+                'contact',
+                'opportunity',
+            ]
+            custom_activity_type_ids = [
+                x['id'] for x in api.get("custom_activity")["data"]
+            ]
+
+            custom_fields = []
+            for schema in BUILT_IN_SCHEMES + custom_activity_type_ids:
+                if schema.startswith('actitype_'):
+                    schema_fields = api.get_custom_fields(f"activity/{schema}")
+                else:
+                    schema_fields = api.get_custom_fields(schema)
+
+                # Add `object_type` field so we can use it to match/map IDs later on in case there are 2 custom fields
+                # with the same name - one Lead Custom Field, and another Custom Activity Custom Field
+                schema_fields = [
+                    {**x, **{'object_type': schema}} for x in schema_fields
+                ]
+                custom_fields.extend(schema_fields)
+
+            return custom_fields
+
+        from_custom_fields = get_custom_fields(from_api)
+        to_custom_fields = get_custom_fields(to_api)
+        for from_cf in from_custom_fields:
+            to_cf = next(
+                (
+                    x
+                    for x in to_custom_fields
+                    if x['name'] == from_cf['name']
+                       and (
+                               x['object_type'] == from_cf['object_type']
+                               or x['object_type']
+                               == map_from_to_id.get(from_cf['object_type'])
+                       )
+                ),
+                None,
+            )
+            if to_cf:
+                map_from_to_id[from_cf['id']] = to_cf['id']
+
+        # Lead & opportunity statuses
+        from_statuses = (
+                from_api.get_lead_statuses() + from_api.get_opportunity_statuses()
+        )
+        to_statuses = (
+                to_api.get_lead_statuses() + to_api.get_opportunity_statuses()
+        )
+        for from_status in from_statuses:
+            to_status = next(
+                (x for x in to_statuses if x['label'] == from_status['label']),
+                None,
+            )
+            if to_status:
+                map_from_to_id[from_status['id']] = to_status['id']
+
+        # Email templates
+        from_templates = from_api.get_all_items('email_template')
+        to_templates = to_api.get_all_items('email_template')
+        for from_template in from_templates:
+            to_template = next(
+                (x for x in to_templates if x['name'] == from_template['name']),
+                None,
+            )
+            if to_template:
+                map_from_to_id[from_template['id']] = to_template['id']
+
+        # SMS templates
+        from_templates = from_api.get_all_items('sms_template')
+        to_templates = to_api.get_all_items('sms_template')
+        for from_template in from_templates:
+            to_template = next(
+                (x for x in to_templates if x['name'] == from_template['name']),
+                None,
+            )
+            if to_template:
+                map_from_to_id[from_template['id']] = to_template['id']
+
+        # Sequences
+        from_sequences = from_api.get_all_items('sequence')
+        to_sequences = to_api.get_all_items('sequence')
+        for from_sequence in from_sequences:
+            to_sequence = next(
+                (x for x in to_sequences if x['name'] == from_sequence['name']),
+                None,
+            )
+            if to_sequence:
+                map_from_to_id[from_sequence['id']] = to_sequence['id']
+
+        # Groups
+        from_groups = from_api.get('group', params={'_fields': 'id,name'})['data']
+        to_groups = to_api.get('group', params={'_fields': 'id,name'})['data']
+        for from_group in from_groups:
+            to_group = next(
+                (x for x in to_groups if x['name'] == from_group['name']),
+                None,
+            )
+            if to_group:
+                map_from_to_id[from_group['id']] = to_group['id']
+
+        return map_from_to_id
+
+
     print("\nCopying Smart Views")
     from_smart_views = from_api.get_all_items('saved_search')
 
     # Used to map old to new IDs (custom fields, custom activity types, lead & opportunity statuses, email templates...)
     # that will be used in global search & replace within each Smart View query
-    map_from_to_id = None
+    map_from_to_id = get_id_mappings()
 
     # Used to map old to new Smart View IDs for Smart Views that use `in:SMART_VIEW_ID` in their queries
     map_from_to_smart_view_id = {}
@@ -621,9 +620,6 @@ if args.smart_views or args.all:
         query = smart_view.get('query')
 
         if s_query:
-            if not map_from_to_id:
-                map_from_to_id = get_id_mappings()
-
             smart_view['s_query'] = structured_replace(s_query, map_from_to_id)
         elif query:
             smart_view['query'] = textual_replace(query, map_from_to_id)
