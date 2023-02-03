@@ -342,6 +342,17 @@ def get_id_mappings():
         if to_sequence:
             map_from_to_id[from_sequence['id']] = to_sequence['id']
 
+    # Groups
+    from_groups = from_api.get('group', params={'_fields': 'id,name'})['data']
+    to_groups = to_api.get('group', params={'_fields': 'id,name'})['data']
+    for from_group in from_groups:
+        to_group = next(
+            (x for x in to_groups if x['name'] == from_group['name']),
+            None,
+        )
+        if to_group:
+            map_from_to_id[from_group['id']] = to_group['id']
+
     return map_from_to_id
 
 
