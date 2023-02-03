@@ -533,6 +533,27 @@ if args.custom_activities or args.all:
                 from_field["custom_activity_type_id"] = new_activity_type["id"]
                 to_api.post("custom_field/activity/", data=from_field)
 
+if args.groups or args.groups_with_members or args.all:
+    print("\nCopying Groups")
+    groups = from_api.get('group')['data']
+    for group in groups:
+        group = from_api.get(f'group/{group["id"]}', params={'_fields': 'name,members'})
+
+        try:
+            new_group = to_api.post('group', data={'name': group['name']})
+
+            if args.groups_with_members:
+                for member in group['members']:
+                    try:
+                        to_api.post(f'group/{new_group["id"]}/member', data={'user_id': member['user_id']})
+                    except APIError as e:
+                        if 'Invalid organization members' in str(e):
+                            pass
+
+            print(f'Added `{group["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{group['name']}` because {str(e)}")
+
 if args.smart_views or args.all:
 
     def structured_replace(value, replacement_dictionary):
@@ -623,27 +644,6 @@ if args.smart_views or args.all:
         # Update the Smart View if necessary
         if smart_view['s_query'] != s_query or smart_view['query'] != query:
             to_api.put(f"saved_search/{smart_view['id']}", data=smart_view)
-
-if args.groups or args.groups_with_members or args.all:
-    print("\nCopying Groups")
-    groups = from_api.get('group')['data']
-    for group in groups:
-        group = from_api.get(f'group/{group["id"]}', params={'_fields': 'name,members'})
-
-        try:
-            new_group = to_api.post('group', data={'name': group['name']})
-
-            if args.groups_with_members:
-                for member in group['members']:
-                    try:
-                        to_api.post(f'group/{new_group["id"]}/member', data={'user_id': member['user_id']})
-                    except APIError as e:
-                        if 'Invalid organization members' in str(e):
-                            pass
-
-            print(f'Added `{group["name"]}`')
-        except APIError as e:
-            print(f"Couldn't add `{group['name']}` because {str(e)}")
 
 if args.webhooks:
     print("\nCopying Webhooks")
