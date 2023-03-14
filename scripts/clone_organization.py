@@ -598,8 +598,23 @@ if args.smart_views or args.all:
         return map_from_to_id
 
 
+    def get_smartviews(api):
+        smart_views = []
+
+        smart_views_ordered = api.get_all_items("saved_search", params={"_fields": "id", "type__in": "lead,contact"})
+        for smart_view in smart_views_ordered:
+            detailed_smart_view = api.get(f'saved_search/{smart_view["id"]}')
+            smart_views.append(detailed_smart_view)
+
+        return smart_views
+
     print("\nCopying Smart Views")
-    from_smart_views = from_api.get_all_items('saved_search')
+    from_smart_views = get_smartviews(from_api)
+
+    # Filter our Smart Views that already exist (by name)
+    to_smart_views = get_smartviews(to_api)
+    to_smart_view_names = [x['name'] for x in to_smart_views]
+    from_smart_views = [x for x in from_smart_views if x['name'] not in to_smart_view_names]
 
     # Used to map old to new IDs (custom fields, custom activity types, lead & opportunity statuses, email templates...)
     # that will be used in global search & replace within each Smart View query
@@ -613,8 +628,41 @@ if args.smart_views or args.all:
     # (when you add a new Smart View, it will show up at the top of the list)
     reverse = list(reversed(from_smart_views))
 
+
+    def get_memberships(api, organization):
+        resp = api.get(f"organization/{organization['id']}", params={"_fields": "memberships,inactive_memberships"})
+        return resp["memberships"] + resp["inactive_memberships"]
+
+    from_memberships = get_memberships(from_api, from_organization)
+    to_memberships = get_memberships(to_api, to_organization)
+    from_to_membership_id = {}
+    for from_membership in from_memberships:
+        to_membership = next((x for x in to_memberships if x['user_email'] == from_membership['user_email']), None)
+        if to_membership:
+            from_to_membership_id[from_membership['id']] = to_membership['id']
+
+    to_user_membership_id = to_api.get("me")["memberships"][0]["id"]
+
     # Create Smart Views in the destination organization
     for smart_view in reverse:
+        # Adjust sharing IDs
+        if smart_view["is_shared"]:
+            # Transfer as-is
+            pass
+        else:
+            # Replace owner membership ID from old to new org
+            new_shared_with = []
+            for old_membership_id in smart_view["shared_with"]:
+                new_membership_id = from_to_membership_id.get(old_membership_id)
+                if new_membership_id:
+                    new_shared_with.append(new_membership_id)
+
+            if not new_shared_with:
+                # No new matching users, default to the user running the transfer
+                new_shared_with.append(to_user_membership_id)
+
+            smart_view['shared_with'] = new_shared_with
+
         # Replace IDs
         s_query = smart_view.get('s_query')
         query = smart_view.get('query')
@@ -625,12 +673,12 @@ if args.smart_views or args.all:
             smart_view['query'] = textual_replace(query, map_from_to_id)
 
         try:
-            old_id = smart_view.pop('id')
+            old_smart_view_id = smart_view.pop('id')
             del smart_view["organization_id"]
             del smart_view["user_id"]
 
             new_smart_view = to_api.post("saved_search", data=smart_view)
-            map_from_to_smart_view_id[old_id] = new_smart_view['id']
+            map_from_to_smart_view_id[old_smart_view_id] = new_smart_view['id']
 
             created_smart_views.append(new_smart_view)
             print(f'Added `{smart_view["name"]}`')
