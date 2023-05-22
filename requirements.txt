@@ -1,7 +1,7 @@
 click==6.7
 progressbar-latest==2.4
 python-dateutil==2.7.3
-requests==2.20.0
+requests==2.31.0
 Unidecode==1.0.22
 closeio==2.0
 gevent==22.10.2
