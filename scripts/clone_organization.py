@@ -101,6 +101,7 @@ to_api = CloseApiWrapper(args.to_api_key)
 from_organization = from_api.get("me")["organizations"][0]
 to_organization = to_api.get("me")["organizations"][0]
 
+# ask user to confirm changes
 message = f"Cloning `{from_organization['name']}` ({from_organization['id']}) organization to `{to_organization['name']}` ({to_organization['id']})..."
 message += '\nData from source organization will be added to the destination organization. No data will be deleted.\n\nContinue?'
 
@@ -108,6 +109,7 @@ confirmed = input(f"{message} (y/n)\n")
 if confirmed not in ["yes", "y"]:
     exit()
 
+# Get lead statuses, remove old ids, then post to new org
 if args.lead_statuses or args.statuses or args.all:
     print("\nCopying Lead Statuses")
 
@@ -121,6 +123,7 @@ if args.lead_statuses or args.statuses or args.all:
         except APIError as e:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
 
+# Copy pipelines and associated opportunity statuses
 if args.opportunity_statuses or args.statuses or args.all:
     print("\nCopying Opportunity Statuses")
     to_pipelines = to_api.get_opportunity_pipelines()
@@ -256,31 +259,26 @@ if args.roles or args.all:
         except APIError as e:
             print(f"Couldn't add `{role['name']}` because {str(e)}")
 
-if args.templates or args.email_templates or args.all:
-    print("\nCopying Email Templates")
-    templates = from_api.get_all_items('email_template')
+# function to copy sms or email templates
+def copy_templates(template_type):
+    templates = from_api.get_all_items(template_type)
     for template in templates:
         del template["id"]
         del template["organization_id"]
 
         try:
-            to_api.post("email_template", data=template)
+            to_api.post(template_type, data=template)
             print(f'Added `{template["name"]}`')
         except APIError as e:
             print(f"Couldn't add `{template['name']}` because {str(e)}")
+
+if args.templates or args.email_templates or args.all:
+    print("\nCopying Email Templates")
+    copy_templates('email_template')
 
 if args.templates or args.sms_templates or args.all:
     print("\nCopying SMS Templates")
-    templates = from_api.get_all_items('sms_template')
-    for template in templates:
-        del template["id"]
-        del template["organization_id"]
-
-        try:
-            to_api.post("sms_template", data=template)
-            print(f'Added `{template["name"]}`')
-        except APIError as e:
-            print(f"Couldn't add `{template['name']}` because {str(e)}")
+    copy_templates('sms_template')
 
 # Assumes all the sequence steps (templates) were already transferred over
 if args.sequences or args.all:
