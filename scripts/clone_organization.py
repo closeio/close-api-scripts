@@ -2,7 +2,7 @@ import argparse
 
 from closeio_api import APIError
 
-from scripts.CloseApiWrapper import CloseApiWrapper
+from CloseApiWrapper import CloseApiWrapper
 
 arg_parser = argparse.ArgumentParser(
     description="Clone one organization to another"
