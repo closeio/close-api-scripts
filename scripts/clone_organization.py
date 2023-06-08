@@ -161,7 +161,7 @@ if args.lead_statuses or args.statuses or args.all:
             print(f'Added lead status `{status["label"]}`')
         except APIError as e:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
-    if first_status_to:
+    if args.clear_lead_and_status and delete_confirmation in ["yes", "y"]:
         # if original statuses in destination org need to be removed, this removes the one remaining
         try:
             to_api.delete(f"status/lead/{first_status_to['id']}")
