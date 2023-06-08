@@ -93,6 +93,11 @@ arg_parser.add_argument(
 arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
 )
+arg_parser.add_argument(
+    "--clear-lead-and-status",
+    action="store_true",
+    help="Remove leads and lead statuses from destination org",
+)
 args = arg_parser.parse_args()
 
 from_api = CloseApiWrapper(args.from_api_key)
@@ -103,11 +108,45 @@ to_organization = to_api.get("me")["organizations"][0]
 
 # ask user to confirm changes
 message = f"Cloning `{from_organization['name']}` ({from_organization['id']}) organization to `{to_organization['name']}` ({to_organization['id']})..."
-message += '\nData from source organization will be added to the destination organization. No data will be deleted.\n\nContinue?'
+if not args.clear_lead_and_status:
+    message += '\nData from source organization will be added to the destination organization. No data will be deleted.\n\nContinue?'
+else:
+    message += '\nData from source organization will be added to the destination organization.\n\nContinue?'
 
 confirmed = input(f"{message} (y/n)\n")
 if confirmed not in ["yes", "y"]:
     exit()
+
+# Clear destination leads and lead statuses
+if args.clear_lead_and_status:
+    delete_message = 'Existing leads and lead statuses will be deleted from the destination organization. \n Continue?'
+    delete_confirmation = input(f"{delete_message} (y/n)")
+    if delete_confirmation in ["yes", "y"]:
+        print("\nDeleting existing leads in destination org")
+        to_leads = to_api.get_all_items('lead', params={'_fields': 'id,name'})
+        for lead in to_leads:
+            try:
+                to_api.delete(f"lead/{lead['id']}/")
+                print(f"Removed lead {lead['name']}")
+            except APIError as e:
+                print(f"Couldn't remove lead `{lead['name']}` because {str(e)}")
+        
+        print("\nDeleting lead statuses in destination org")
+        to_lead_statuses = to_api.get_lead_statuses()
+        # at least one status must exist so we can rename the first one to have the label match the id for now
+        first_status_to = to_lead_statuses[0]
+        del to_lead_statuses[0]
+        first_status_to['label'] = first_status_to['id']
+        try:
+            to_api.put(f"status/lead/{first_status_to['id']}", data=first_status_to)
+        except APIError as e:
+            print(f"Couldn't remove `{first_status_to['label']}` because {str(e)}")
+        for status in to_lead_statuses:
+            try:
+                to_api.delete(f"status/lead/{status['id']}")
+                print(f"Removed lead status {status['label']}")
+            except APIError as e:
+                print(f"Couldn't remove `{status['label']}` because {str(e)}")
 
 # Copy lead statuses
 if args.lead_statuses or args.statuses or args.all:
@@ -122,6 +161,13 @@ if args.lead_statuses or args.statuses or args.all:
             print(f'Added lead status `{status["label"]}`')
         except APIError as e:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
+    if first_status_to:
+        # if original statuses in destination org need to be removed, this removes the one remaining
+        try:
+            to_api.delete(f"status/lead/{first_status_to['id']}")
+            print(f"Removed old default lead status {first_status_to['label']}")
+        except APIError as e:
+            print(f"Couldn't remove `{first_status_to['label']}` because {str(e)}")
 
 # Copy pipelines and associated opportunity statuses
 if args.opportunity_statuses or args.statuses or args.all:
@@ -725,3 +771,4 @@ if args.webhooks:
             print(f'Added `{webhook["url"]}`')
         except APIError as e:
             print(f"Couldn't add `{webhook['url']}` because {str(e)}")
+
