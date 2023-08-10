@@ -91,6 +91,11 @@ arg_parser.add_argument(
                                                        "added to the destination organization will be skipped."
 )
 arg_parser.add_argument(
+    "--custom-objects",
+    action="store_true",
+    help="Copy custom objects",
+)
+arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
 )
 args = arg_parser.parse_args()
@@ -420,6 +425,18 @@ if args.custom_activities or args.all:
                 # Non-shared (regular) field, just create it
                 from_field["custom_activity_type_id"] = new_activity_type["id"]
                 to_api.post("custom_field/activity/", data=from_field)
+
+if args.custom_objects or args.all:
+    print("\nCopying Custom Objects")
+     # Fetch both shared and non-shared object custom fields
+    from_custom_fields = from_api.get_all_items(
+        'custom_field/object'
+    ) + from_api.get_all_items('custom_field/shared')
+
+    # Get the existing shared custom fields in case the new org already has them
+    to_shared_custom_fields = to_api.get_all_items('custom_field/shared')
+
+    custom_object_types = from_api.get("custom_object_type")["data"]
 
 if args.groups or args.groups_with_members or args.all:
     print("\nCopying Groups")
