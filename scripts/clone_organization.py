@@ -60,6 +60,11 @@ arg_parser.add_argument(
     help="Copy custom activities",
 )
 arg_parser.add_argument(
+    "--custom-objects",
+    action="store_true",
+    help="Copy custom objects",
+)
+arg_parser.add_argument(
     "--smart-views", action="store_true", help="Copy smart views"
 )
 arg_parser.add_argument(
@@ -89,11 +94,6 @@ arg_parser.add_argument(
 arg_parser.add_argument(
     "--groups-with-members", action="store_true", help="Copy groups including members. Any member that hasn't been "
                                                        "added to the destination organization will be skipped."
-)
-arg_parser.add_argument(
-    "--custom-objects",
-    action="store_true",
-    help="Copy custom objects",
 )
 arg_parser.add_argument(
     "--all", "-a", action="store_true", help="Copy all settings"
@@ -165,6 +165,116 @@ if args.opportunity_statuses or args.statuses or args.all:
                         f"Couldn't add `{opp_status['label']}` because {str(e)}"
                     )
 
+if args.custom_objects or args.all:
+    print("\nCopying Custom Objects")
+
+    custom_object_types = from_api.get("custom_object_type")["data"]
+
+    # Get the existing shared custom fields in case the new org already has them
+    to_shared_custom_fields = to_api.get_all_items('custom_field/shared')
+
+    from_custom_object_fields = from_api.get(
+        'custom_field/custom_object_type'
+    )['data'] + from_api.get_all_items('custom_field/shared')
+
+    old_to_new_object = {}
+    # create all objects first
+    for object_type in custom_object_types:
+        if object_type['editable_with_roles']:
+            new_roles = to_api.get('role')['data']
+            new_editable_with_roles = []
+            for old_role_id in object_type['editable_with_roles']:
+                if old_role_id.startswith('role_'):
+                    old_role_name = from_api.get(f'role/{old_role_id}')['name']
+                    new_role = next(
+                        (x for x in new_roles if x['name'] == old_role_name),
+                        None,
+                    )
+                    if new_role:
+                        new_editable_with_roles.append(new_role['id'])
+                else:
+                    # Built-in roles such as `admin`
+                    new_editable_with_roles.append(old_role_id)
+
+            object_type['editable_with_roles'] = new_editable_with_roles
+
+        try:
+            del object_type["organization_id"]
+            new_object_type = to_api.post(
+                "custom_object_type", data=object_type
+            )
+            old_to_new_object[object_type['id']] = new_object_type['id']
+            print(f"Added `{object_type['name']}` custom object")
+        except APIError as e:
+            print(
+                f"Couldn't add `{object_type['name']}` custom object because {str(e)}"
+            )
+            continue
+
+    for object_type in custom_object_types:
+        for field in object_type["fields"]:
+            # Get the object directly because some fields like `choices` aren't exposed in activity type `fields` array
+            from_field = next(
+                (x for x in from_custom_object_fields if x["id"] == field["id"]),
+                None,
+            )
+            from_field.pop('organization_id', None)
+
+            if field['referenced_custom_type_id']:
+                from_field['referenced_custom_type_id'] = old_to_new_object.get(field['referenced_custom_type_id'], None)
+            if field["is_shared"]:
+                to_field = next(
+                    (
+                        x
+                        for x in to_shared_custom_fields
+                        if x['name'] == field['name']
+                    ),
+                    None,
+                )
+
+                if not to_field:
+                    # Create new shared field because it doesn't exist yet
+                    try:
+                        # Delete `associations` field as that references old (source) activities
+                        del from_field['associations']
+
+                        to_field = to_api.post(
+                            f"custom_field/shared/",
+                            data=from_field,
+                        )
+                        to_shared_custom_fields.append(to_field)
+                        print(f"Added `{field['name']}` shared field")
+                    except APIError as e:
+                        print(
+                            f"Couldn't add `{field['name']}` shared field because {str(e)}"
+                        )
+                        continue
+
+                try:
+                    to_api.post(
+                        f"custom_field/shared/{to_field['id']}/association",
+                        data={
+                            'object_type': 'custom_object_type',
+                            "custom_object_type_id": old_to_new_object.get(object_type['id'],None),
+                            "required": field['required'],
+                            'editable_with_roles': field['editable_with_roles'],
+                        },
+                    )
+                except APIError as e:
+                    print(
+                            f"Couldn't add `{field['name']}` associations because {str(e)}"
+                        )
+            else:
+                # Non-shared (regular) field, just create it
+                try:
+                    from_field["custom_object_type_id"] = old_to_new_object.get(object_type['id'],None)
+                    to_api.post("custom_field/custom_object_type", data=from_field)
+                except APIError as e:
+                    print(from_field)
+                    print(
+                            f"Couldn't add `{field['name']}` custom field because {str(e)}"
+                        )
+
 
 def copy_custom_fields(custom_field_type):
     # Get the existing shared custom fields in case the new org already has them
@@ -177,7 +287,17 @@ def copy_custom_fields(custom_field_type):
     for from_cf in from_custom_fields:
         del from_cf["id"]
         del from_cf["organization_id"]
-
+        if from_cf['referenced_custom_type_id']:
+            to_objects = to_api.get('custom_object_type')['data']
+            from_object_name = from_api.get(f'custom_object_type/{from_cf["referenced_custom_type_id"]}').get('name')
+            to_object = next(
+                (x for x in to_objects if x["name"] == from_object_name),
+                None,
+            )
+            if to_object:
+                from_cf['referenced_custom_type_id'] = to_object['id']
+            else:
+                continue
         try:
             if from_cf['is_shared']:
                 to_cf = next(
@@ -383,7 +503,17 @@ if args.custom_activities or args.all:
                 None,
             )
             from_field.pop('organization_id', None)
-
+            if from_field['referenced_custom_type_id']:
+                to_objects = to_api.get('custom_object_type')['data']
+                from_object_name = from_api.get(f'custom_object_type/{from_field["referenced_custom_type_id"]}').get('name')
+                to_object = next(
+                    (x for x in to_objects if x["name"] == from_object_name),
+                    None,
+                )
+                if to_object:
+                    from_field['referenced_custom_type_id'] = to_object['id']
+                else:
+                    continue
             if field["is_shared"]:
                 to_field = next(
                     (
@@ -425,18 +555,6 @@ if args.custom_activities or args.all:
                 # Non-shared (regular) field, just create it
                 from_field["custom_activity_type_id"] = new_activity_type["id"]
                 to_api.post("custom_field/activity/", data=from_field)
-
-if args.custom_objects or args.all:
-    print("\nCopying Custom Objects")
-     # Fetch both shared and non-shared object custom fields
-    from_custom_fields = from_api.get_all_items(
-        'custom_field/object'
-    ) + from_api.get_all_items('custom_field/shared')
-
-    # Get the existing shared custom fields in case the new org already has them
-    to_shared_custom_fields = to_api.get_all_items('custom_field/shared')
-
-    custom_object_types = from_api.get("custom_object_type")["data"]
 
 if args.groups or args.groups_with_members or args.all:
     print("\nCopying Groups")
