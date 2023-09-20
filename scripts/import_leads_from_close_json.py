@@ -3,10 +3,12 @@ import copy
 import json
 
 import gevent.monkey
+gevent.monkey.patch_all()
+
 from closeio_api import APIError, Client as CloseIO_API
 from gevent.pool import Pool
 
-gevent.monkey.patch_all()
+
 
 parser = argparse.ArgumentParser(
     description='Import Close Leads from a Close JSON file into a New Org'
