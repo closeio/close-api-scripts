@@ -2,7 +2,7 @@ import argparse
 
 from closeio_api import APIError
 
-from scripts.CloseApiWrapper import CloseApiWrapper
+from CloseApiWrapper import CloseApiWrapper
 
 arg_parser = argparse.ArgumentParser(
     description="Clone one organization to another"
@@ -106,6 +106,7 @@ to_api = CloseApiWrapper(args.to_api_key)
 from_organization = from_api.get("me")["organizations"][0]
 to_organization = to_api.get("me")["organizations"][0]
 
+# ask user to confirm changes
 message = f"Cloning `{from_organization['name']}` ({from_organization['id']}) organization to `{to_organization['name']}` ({to_organization['id']})..."
 message += '\nData from source organization will be added to the destination organization. No data will be deleted.\n\nContinue?'
 
@@ -113,6 +114,7 @@ confirmed = input(f"{message} (y/n)\n")
 if confirmed not in ["yes", "y"]:
     exit()
 
+# Copy lead statuses
 if args.lead_statuses or args.statuses or args.all:
     print("\nCopying Lead Statuses")
 
@@ -126,6 +128,7 @@ if args.lead_statuses or args.statuses or args.all:
         except APIError as e:
             print(f"Couldn't add `{status['label']}` because {str(e)}")
 
+# Copy pipelines and associated opportunity statuses
 if args.opportunity_statuses or args.statuses or args.all:
     print("\nCopying Opportunity Statuses")
     to_pipelines = to_api.get_opportunity_pipelines()
@@ -300,6 +303,7 @@ def copy_custom_fields(custom_field_type):
                 continue
         try:
             if from_cf['is_shared']:
+                # check to see if shared custom field already exists
                 to_cf = next(
                     (
                         x
@@ -308,7 +312,7 @@ def copy_custom_fields(custom_field_type):
                     ),
                     None,
                 )
-
+                # add shared custom fields that do not already exist
                 if not to_cf:
                     to_cf = to_api.post(f"custom_field/shared", data=from_cf)
                     print(f'Created `{from_cf["name"]}` shared custom field')
@@ -332,19 +336,22 @@ def copy_custom_fields(custom_field_type):
         except APIError as e:
             print(f"Couldn't add `{from_cf['name']}` because {str(e)}")
 
-
+# copy lead custom fields
 if args.lead_custom_fields or args.custom_fields or args.all:
     print("\nCopying Lead Custom Fields")
     copy_custom_fields('lead')
 
+# copy opportunity custom fields
 if args.opportunity_custom_fields or args.custom_fields or args.all:
     print("\nCopying Opportunity Custom Fields")
     copy_custom_fields('opportunity')
 
+# copy contact custom fields
 if args.contact_custom_fields or args.custom_fields or args.all:
     print("\nCopying Contact Custom Fields")
     copy_custom_fields('contact')
 
+# copy integration links
 if args.integration_links or args.all:
     print("\nCopying Integration Links")
     integration_links = from_api.get_all_items('integration_link')
@@ -358,6 +365,7 @@ if args.integration_links or args.all:
         except APIError as e:
             print(f"Couldn't add `{link['name']}` because {str(e)}")
 
+# copy roles
 if args.roles or args.all:
     BUILT_IN_ROLES = [
         "Admin",
@@ -369,6 +377,7 @@ if args.roles or args.all:
     print("\nCopying Roles")
     roles = from_api.get_all_items('role')
     for role in roles:
+        # skip built in roles
         if role["name"] in BUILT_IN_ROLES:
             continue
 
@@ -381,38 +390,36 @@ if args.roles or args.all:
         except APIError as e:
             print(f"Couldn't add `{role['name']}` because {str(e)}")
 
+# function to copy sms or email templates
+def copy_templates(template_type):
+    templates = from_api.get_all_items(template_type)
+    for template in templates:
+        del template["id"]
+        del template["organization_id"]
+
+        try:
+            to_api.post(template_type, data=template)
+            print(f'Added `{template["name"]}`')
+        except APIError as e:
+            print(f"Couldn't add `{template['name']}` because {str(e)}")
+
+# Copy email templates
 if args.templates or args.email_templates or args.all:
     print("\nCopying Email Templates")
-    templates = from_api.get_all_items('email_template')
-    for template in templates:
-        del template["id"]
-        del template["organization_id"]
+    copy_templates('email_template')
 
-        try:
-            to_api.post("email_template", data=template)
-            print(f'Added `{template["name"]}`')
-        except APIError as e:
-            print(f"Couldn't add `{template['name']}` because {str(e)}")
-
+# copy sms templates
 if args.templates or args.sms_templates or args.all:
     print("\nCopying SMS Templates")
-    templates = from_api.get_all_items('sms_template')
-    for template in templates:
-        del template["id"]
-        del template["organization_id"]
-
-        try:
-            to_api.post("sms_template", data=template)
-            print(f'Added `{template["name"]}`')
-        except APIError as e:
-            print(f"Couldn't add `{template['name']}` because {str(e)}")
+    copy_templates('sms_template')
 
 # Assumes all the sequence steps (templates) were already transferred over
 if args.sequences or args.all:
     print("\nCopying Sequences")
-
+    # get existing templates in new org
     to_email_templates = to_api.get_all_items('email_template')
     to_sms_templates = to_api.get_all_items('sms_template')
+    # get sequences in old org
     from_sequences = from_api.get_all_items('sequence')
     for sequence in from_sequences:
         del sequence["id"]
@@ -452,6 +459,7 @@ if args.sequences or args.all:
         except APIError as e:
             print(f"Couldn't add `{sequence['name']}` because {str(e)}")
 
+# Copy custom activities
 if args.custom_activities or args.all:
     print("\nCopying Custom Activities")
 
@@ -515,6 +523,7 @@ if args.custom_activities or args.all:
                 else:
                     continue
             if field["is_shared"]:
+                # check if field already exists
                 to_field = next(
                     (
                         x
@@ -556,6 +565,7 @@ if args.custom_activities or args.all:
                 from_field["custom_activity_type_id"] = new_activity_type["id"]
                 to_api.post("custom_field/activity/", data=from_field)
 
+# copy groups
 if args.groups or args.groups_with_members or args.all:
     print("\nCopying Groups")
     groups = from_api.get('group')['data']
@@ -566,6 +576,7 @@ if args.groups or args.groups_with_members or args.all:
             new_group = to_api.post('group', data={'name': group['name']})
 
             if args.groups_with_members:
+                # copy group members
                 for member in group['members']:
                     try:
                         to_api.post(f'group/{new_group["id"]}/member', data={'user_id': member['user_id']})
@@ -577,6 +588,7 @@ if args.groups or args.groups_with_members or args.all:
         except APIError as e:
             print(f"Couldn't add `{group['name']}` because {str(e)}")
 
+# copy smart views
 if args.smart_views or args.all:
 
     def structured_replace(value, replacement_dictionary):
@@ -612,6 +624,7 @@ if args.smart_views or args.all:
 
 
     def get_id_mappings():
+        # create mapping dictionary of all custom objects accessible by smart views
         map_from_to_id = {}
 
         # Custom Activity Types
@@ -746,7 +759,7 @@ if args.smart_views or args.all:
     print("\nCopying Smart Views")
     from_smart_views = get_smartviews(from_api)
 
-    # Filter our Smart Views that already exist (by name)
+    # Filter out Smart Views that already exist (by name)
     to_smart_views = get_smartviews(to_api)
     to_smart_view_names = [x['name'] for x in to_smart_views]
     from_smart_views = [x for x in from_smart_views if x['name'] not in to_smart_view_names]
@@ -767,7 +780,7 @@ if args.smart_views or args.all:
     def get_memberships(api, organization):
         resp = api.get(f"organization/{organization['id']}", params={"_fields": "memberships,inactive_memberships"})
         return resp["memberships"] + resp["inactive_memberships"]
-
+    # map user access from old org to new org
     from_memberships = get_memberships(from_api, from_organization)
     to_memberships = get_memberships(to_api, to_organization)
     from_to_membership_id = {}
@@ -835,6 +848,7 @@ if args.smart_views or args.all:
         if smart_view['s_query'] != s_query or smart_view['query'] != query:
             to_api.put(f"saved_search/{smart_view['id']}", data=smart_view)
 
+# copy webhooks
 if args.webhooks:
     print("\nCopying Webhooks")
     webhooks = from_api.get_all_items('webhook')
