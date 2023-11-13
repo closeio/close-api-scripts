@@ -55,6 +55,12 @@ parser.add_argument(
     action='store_true',
     help='Use this field if you want to include a call cost column in your export CSV',
 )
+parser.add_argument(
+    '--transcripts',
+    '-t',
+    action='store_true',
+    help='Use this field if you want to include a call transcript column in your export CSV',
+)
 
 args = parser.parse_args()
 
@@ -139,6 +145,9 @@ call_fields = [
 if args.call_costs:
     call_fields += 'cost'
 
+if args.transcripts:
+    call_fields += ['recording_transcript']
+
 params['_fields'] = ','.join(call_fields)
 
 print("Getting Calls...")
@@ -151,6 +160,8 @@ for call in calls:
 
     if call.get('cost'):
         call['formatted_cost'] = f"${(float(call['cost']) / 100)}"
+    if call.get('recording_transcript'):
+        call['recording_transcript'] = call.get('recording_transcript').get('summary_text')
 
 # Filter calls
 if args.missed_or_voicemail:
@@ -171,7 +182,6 @@ with open(file_name, 'w', newline='', encoding='utf-8') as f:
     keys = call_fields + ['lead_name', 'contact_name']
     if args.call_costs:
         keys += ['cost', 'formatted_cost']
-
     writer = csv.DictWriter(f, keys)
     writer.writeheader()
     writer.writerows(calls)
