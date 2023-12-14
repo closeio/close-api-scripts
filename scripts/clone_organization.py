@@ -77,7 +77,7 @@ arg_parser.add_argument(
     "--sms-templates", action="store_true", help="Copy SMS templates"
 )
 arg_parser.add_argument(
-    "--sequences", action="store_true", help="Copy sequences"
+    "--sequences", "--workflows", action="store_true", help="Copy workflows (excluding any that contain non-Email or non-SMS steps)"
 )
 arg_parser.add_argument(
     "--integration-links",
@@ -408,7 +408,7 @@ if args.templates or args.sms_templates or args.all:
             print(f"Couldn't add `{template['name']}` because {str(e)}")
 
 # Assumes all the sequence steps (templates) were already transferred over
-if args.sequences or args.all:
+if args.sequences or args.workflows or args.all:
     print("\nCopying Sequences")
 
     to_email_templates = to_api.get_all_items('email_template')
