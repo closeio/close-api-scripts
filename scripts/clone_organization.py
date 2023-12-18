@@ -77,7 +77,7 @@ arg_parser.add_argument(
     "--sms-templates", action="store_true", help="Copy SMS templates"
 )
 arg_parser.add_argument(
-    "--sequences", action="store_true", help="Copy sequences"
+    "--sequences", "--workflows", action="store_true", help="Copy workflows (excluding any that contain non-Email or non-SMS steps)"
 )
 arg_parser.add_argument(
     "--integration-links",
@@ -407,17 +407,22 @@ if args.templates or args.sms_templates or args.all:
         except APIError as e:
             print(f"Couldn't add `{template['name']}` because {str(e)}")
 
-# Assumes all the sequence steps (templates) were already transferred over
-if args.sequences or args.all:
-    print("\nCopying Sequences")
+# Assumes all the workflow steps (templates) were already transferred over
+if args.sequences or args.workflows or args.all:
+    print("\nCopying Workflows")
 
     to_email_templates = to_api.get_all_items('email_template')
     to_sms_templates = to_api.get_all_items('sms_template')
-    from_sequences = from_api.get_all_items('sequence')
-    for sequence in from_sequences:
-        del sequence["id"]
-        del sequence["organization_id"]
-        for step in sequence["steps"]:
+    from_workflows = from_api.get_all_items('sequence')
+    for workflow in from_workflows:
+        steps = workflow["steps"]
+        if [x for x in steps if x['type'] not in ['email', 'sms']]:
+            print(f'Skipping `{workflow["name"]}` because it contains non-Email or non-SMS steps')
+            continue
+
+        del workflow["id"]
+        del workflow["organization_id"]
+        for step in steps:
             del step["id"]
 
             # Replace Email Template ID (if it exists ie. it's an Email step)
@@ -447,10 +452,10 @@ if args.sequences or args.all:
                         step["sms_template_id"] = template["id"]
 
         try:
-            to_api.post("sequence", data=sequence)
-            print(f'Added `{sequence["name"]}`')
+            to_api.post("sequence", data=workflow)
+            print(f'Added `{workflow["name"]}`')
         except APIError as e:
-            print(f"Couldn't add `{sequence['name']}` because {str(e)}")
+            print(f"Couldn't add `{workflow['name']}` because {str(e)}")
 
 if args.custom_activities or args.all:
     print("\nCopying Custom Activities")
@@ -584,7 +589,7 @@ if args.smart_views or args.all:
         Recursively replace values in a dictionary with values from a replacement dictionary.
         This is used to replace IDs in source Smart Views with the new IDs in the destination account.
 
-        IDs can be lead status IDs, opportunity status IDs, email templates, sequences, custom fields, etc. - pretty
+        IDs can be lead status IDs, opportunity status IDs, email templates, workflows, custom fields, etc. - pretty
         much anything apart from Smart View IDs which are handled separately as they are not known until the Smart View
         is created.
         '''
@@ -708,16 +713,16 @@ if args.smart_views or args.all:
             if to_template:
                 map_from_to_id[from_template['id']] = to_template['id']
 
-        # Sequences
-        from_sequences = from_api.get_all_items('sequence')
-        to_sequences = to_api.get_all_items('sequence')
-        for from_sequence in from_sequences:
-            to_sequence = next(
-                (x for x in to_sequences if x['name'] == from_sequence['name']),
+        # Workflows
+        from_workflows = from_api.get_all_items('sequence')
+        to_workflows = to_api.get_all_items('sequence')
+        for from_workflow in from_workflows:
+            to_workflow = next(
+                (x for x in to_workflows if x['name'] == from_workflow['name']),
                 None,
             )
-            if to_sequence:
-                map_from_to_id[from_sequence['id']] = to_sequence['id']
+            if to_workflow:
+                map_from_to_id[from_workflow['id']] = to_workflow['id']
 
         # Groups
         from_groups = from_api.get('group', params={'_fields': 'id,name'})['data']
