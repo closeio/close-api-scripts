@@ -408,7 +408,7 @@ if args.templates or args.sms_templates or args.all:
             print(f"Couldn't add `{template['name']}` because {str(e)}")
 
 # Assumes all the workflow steps (templates) were already transferred over
-if args.sequences or args.workflows or args.all:
+if args.sequences or args.all:
     print("\nCopying Workflows")
 
     to_email_templates = to_api.get_all_items('email_template')
@@ -416,7 +416,7 @@ if args.sequences or args.workflows or args.all:
     from_workflows = from_api.get_all_items('sequence')
     for workflow in from_workflows:
         steps = workflow["steps"]
-        if [x for x in steps if x['type'] not in ['email', 'sms']]:
+        if [x for x in steps if x['step_type'] not in ['email', 'sms']]:
             print(f'Skipping `{workflow["name"]}` because it contains non-Email or non-SMS steps')
             continue
 
