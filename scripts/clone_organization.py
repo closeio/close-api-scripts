@@ -807,6 +807,9 @@ if args.smart_views or args.all:
         elif query:
             smart_view['query'] = textual_replace(query, map_from_to_id)
 
+        # If user specifically selected some columns, replace IDs within those as well (in case they are custom fields)
+        smart_view['selected_fields'] = structured_replace(smart_view['selected_fields'], map_from_to_id)
+
         try:
             old_smart_view_id = smart_view.pop('id')
             del smart_view["organization_id"]
