@@ -113,6 +113,36 @@ confirmed = input(f"{message} (y/n)\n")
 if confirmed not in ["yes", "y"]:
     exit()
 
+# Role mapping
+from_roles = from_api.get('role')['data']
+to_roles = to_api.get('role')['data']
+
+
+def replace_old_role_ids_with_new(editable_with_roles):
+    new_roles = []
+    for old_role_id in editable_with_roles:
+        if old_role_id.startswith('role_'):
+            old_role = next(
+                (x for x in from_roles if x['id'] == old_role_id),
+                None,
+            )
+            if not old_role:
+                print(f"Couldn't find role with ID `{old_role_id}`")
+                continue
+
+            new_role = next(
+                (x for x in to_roles if x['name'] == old_role['name']),
+                None,
+            )
+            if new_role:
+                new_roles.append(new_role['id'])
+        else:
+            # Built-in roles such as `admin`
+            new_roles.append(old_role_id)
+
+    return new_roles
+
+
 if args.lead_statuses or args.statuses or args.all:
     print("\nCopying Lead Statuses")
 
@@ -168,7 +198,7 @@ if args.opportunity_statuses or args.statuses or args.all:
 if args.custom_objects or args.all:
     print("\nCopying Custom Objects")
 
-    custom_object_types = from_api.get("custom_object_type")["data"]
+    from_custom_object_types = from_api.get("custom_object_type")["data"]
 
     # Get the existing shared custom fields in case the new org already has them
     to_shared_custom_fields = to_api.get_all_items('custom_field/shared')
@@ -177,33 +207,18 @@ if args.custom_objects or args.all:
         'custom_field/custom_object_type'
     )['data'] + from_api.get_all_items('custom_field/shared')
 
-    old_to_new_object = {}
-    # create all objects first
-    for object_type in custom_object_types:
-        if object_type['editable_with_roles']:
-            new_roles = to_api.get('role')['data']
-            new_editable_with_roles = []
-            for old_role_id in object_type['editable_with_roles']:
-                if old_role_id.startswith('role_'):
-                    old_role_name = from_api.get(f'role/{old_role_id}')['name']
-                    new_role = next(
-                        (x for x in new_roles if x['name'] == old_role_name),
-                        None,
-                    )
-                    if new_role:
-                        new_editable_with_roles.append(new_role['id'])
-                else:
-                    # Built-in roles such as `admin`
-                    new_editable_with_roles.append(old_role_id)
+    old_to_new_object_map = {}
 
-            object_type['editable_with_roles'] = new_editable_with_roles
+    # create all objects first
+    for object_type in from_custom_object_types:
+        object_type['editable_with_roles'] = replace_old_role_ids_with_new(object_type['editable_with_roles'])
 
         try:
             del object_type["organization_id"]
             new_object_type = to_api.post(
                 "custom_object_type", data=object_type
             )
-            old_to_new_object[object_type['id']] = new_object_type['id']
+            old_to_new_object_map[object_type['id']] = new_object_type['id']
             print(f"Added `{object_type['name']}` custom object")
         except APIError as e:
             print(
@@ -211,7 +226,7 @@ if args.custom_objects or args.all:
             )
             continue
 
-    for object_type in custom_object_types:
+    for object_type in from_custom_object_types:
         for field in object_type["fields"]:
             # Get the object directly because some fields like `choices` aren't exposed in activity type `fields` array
             from_field = next(
@@ -221,7 +236,8 @@ if args.custom_objects or args.all:
             from_field.pop('organization_id', None)
 
             if field['referenced_custom_type_id']:
-                from_field['referenced_custom_type_id'] = old_to_new_object.get(field['referenced_custom_type_id'], None)
+                from_field['referenced_custom_type_id'] = old_to_new_object_map.get(field['referenced_custom_type_id'],
+                                                                                None)
             if field["is_shared"]:
                 to_field = next(
                     (
@@ -255,25 +271,28 @@ if args.custom_objects or args.all:
                         f"custom_field/shared/{to_field['id']}/association",
                         data={
                             'object_type': 'custom_object_type',
-                            "custom_object_type_id": old_to_new_object.get(object_type['id'],None),
+                            "custom_object_type_id": old_to_new_object_map.get(object_type['id'], None),
                             "required": field['required'],
-                            'editable_with_roles': field['editable_with_roles'],
+                            'editable_with_roles': replace_old_role_ids_with_new(field['editable_with_roles']),
                         },
                     )
                 except APIError as e:
                     print(
-                            f"Couldn't add `{field['name']}` associations because {str(e)}"
-                        )
+                        f"Couldn't add `{field['name']}` associations because {str(e)}"
+                    )
             else:
                 # Non-shared (regular) field, just create it
+                from_field['editable_with_roles'] = replace_old_role_ids_with_new(from_field['editable_with_roles'])
+                from_field["custom_object_type_id"] = old_to_new_object_map.get(object_type['id'], None)
+
                 try:
-                    from_field["custom_object_type_id"] = old_to_new_object.get(object_type['id'],None)
                     to_api.post("custom_field/custom_object_type", data=from_field)
+                    print(f'Added `{field["name"]}` custom field')
                 except APIError as e:
                     print(from_field)
                     print(
-                            f"Couldn't add `{field['name']}` custom field because {str(e)}"
-                        )
+                        f"Couldn't add `{field['name']}` custom field because {str(e)}"
+                    )
 
 
 def copy_custom_fields(custom_field_type):
@@ -298,6 +317,7 @@ def copy_custom_fields(custom_field_type):
                 from_cf['referenced_custom_type_id'] = to_object['id']
             else:
                 continue
+
         try:
             if from_cf['is_shared']:
                 to_cf = next(
@@ -317,14 +337,22 @@ def copy_custom_fields(custom_field_type):
                 #
                 # For example, if you have a shared field for leads and contacts, and you're copying only lead custom fields,
                 # we would add only `lead` association to that shared field.
+                association = next(x for x in from_cf['associations'] if x['object_type'] == custom_field_type)
                 to_api.post(
                     f"custom_field/shared/{to_cf['id']}/association",
-                    data={'object_type': custom_field_type},
+                    data={
+                        'object_type': custom_field_type,
+                        'editable_with_roles': replace_old_role_ids_with_new(association['editable_with_roles']),
+                        'required': association['required']
+                    },
                 )
                 print(
                     f"Added `{custom_field_type}` association to shared `{from_cf['name']}` custom field"
                 )
             else:
+                # Swap old role IDs with new role IDs (if any)
+                from_cf['editable_with_roles'] = replace_old_role_ids_with_new(from_cf['editable_with_roles'])
+
                 to_api.post(f"custom_field/{custom_field_type}", data=from_cf)
                 print(
                     f'Created `{from_cf["name"]}` {custom_field_type} custom field'
@@ -471,23 +499,7 @@ if args.custom_activities or args.all:
     custom_activity_types = from_api.get("custom_activity")["data"]
     for activity_type in custom_activity_types:
         # Re-map old role IDs to new role IDs (by name)
-        if activity_type['editable_with_roles']:
-            new_roles = to_api.get('role')['data']
-            new_editable_with_roles = []
-            for old_role_id in activity_type['editable_with_roles']:
-                if old_role_id.startswith('role_'):
-                    old_role_name = from_api.get(f'role/{old_role_id}')['name']
-                    new_role = next(
-                        (x for x in new_roles if x['name'] == old_role_name),
-                        None,
-                    )
-                    if new_role:
-                        new_editable_with_roles.append(new_role['id'])
-                else:
-                    # Built-in roles such as `admin`
-                    new_editable_with_roles.append(old_role_id)
-
-            activity_type['editable_with_roles'] = new_editable_with_roles
+        activity_type['editable_with_roles'] = replace_old_role_ids_with_new(activity_type['editable_with_roles'])
 
         try:
             del activity_type["organization_id"]
@@ -553,11 +565,12 @@ if args.custom_activities or args.all:
                         'object_type': 'custom_activity_type',
                         "custom_activity_type_id": new_activity_type["id"],
                         "required": field['required'],
-                        'editable_with_roles': field['editable_with_roles'],
+                        'editable_with_roles': replace_old_role_ids_with_new(field['editable_with_roles']),
                     },
                 )
             else:
                 # Non-shared (regular) field, just create it
+                from_field['editable_with_roles'] = replace_old_role_ids_with_new(from_field['editable_with_roles'])
                 from_field["custom_activity_type_id"] = new_activity_type["id"]
                 to_api.post("custom_field/activity/", data=from_field)
 
