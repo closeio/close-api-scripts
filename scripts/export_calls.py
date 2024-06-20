@@ -143,7 +143,7 @@ call_fields = [
 ]
 
 if args.call_costs:
-    call_fields += 'cost'
+    call_fields += ['cost']
 
 if args.transcripts:
     call_fields += ['recording_transcript']
@@ -181,7 +181,7 @@ file_name = f'{organization_name} Calls.csv'
 with open(file_name, 'w', newline='', encoding='utf-8') as f:
     keys = call_fields + ['lead_name', 'contact_name']
     if args.call_costs:
-        keys += ['cost', 'formatted_cost']
+        keys += ['formatted_cost']
     writer = csv.DictWriter(f, keys)
     writer.writeheader()
     writer.writerows(calls)
